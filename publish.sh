@@ -42,6 +42,12 @@ echo "→ Пакування Windows..."
 (cd windows && zip -r "../${WIN_ZIP}" install.cmd install.ps1 README.md)
 echo "  ✓ ${WIN_ZIP} ($(du -h "$WIN_ZIP" | cut -f1))"
 
+MAC_ZIP="${OUT_DIR}/kodomandry-installer-macos.zip"
+echo "→ Пакування macOS..."
+chmod +x macos/install.sh
+(cd macos && zip -r "../${MAC_ZIP}" install.sh README.md)
+echo "  ✓ ${MAC_ZIP} ($(du -h "$MAC_ZIP" | cut -f1))"
+
 # TODO: macOS коли буде готово
 # (cd macos && zip -r "../${OUT_DIR}/kodomandry-installer-macos.zip" install.sh README.md)
 
@@ -63,7 +69,7 @@ gh release create "$TAG" \
     --notes "Windows installer. Подвійний клік на \`install.cmd\` у розпакованій папці.
 
 Див. [README](https://github.com/asemelinsky/kodomandry-installer#readme) для деталей." \
-    "$WIN_ZIP"
+    "$WIN_ZIP" "$MAC_ZIP"
 
 echo ""
 echo "✓ Готово: https://github.com/asemelinsky/kodomandry-installer/releases/tag/${TAG}"
