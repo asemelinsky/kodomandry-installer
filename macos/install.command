@@ -99,12 +99,13 @@ for a in data['assets']:
     xattr -dr com.apple.quarantine "$PRISM_DIR/Prism Launcher.app" 2>/dev/null || true
 fi
 
-# Portable-режим — файл-маркер
-PORTABLE_FLAG="$PRISM_DIR/Prism Launcher.app/Contents/MacOS/portable.txt"
+# Portable-режим — файл-маркер поруч із .app (НЕ всередині bundle,
+# бо це ламає підпис і Prism на macOS шукає дані саме там)
+PORTABLE_FLAG="$PRISM_DIR/portable.txt"
 touch "$PORTABLE_FLAG"
 
 # Конфіг
-PRISM_CFG="$PRISM_DIR/Prism Launcher.app/Contents/MacOS/prismlauncher.cfg"
+PRISM_CFG="$PRISM_DIR/prismlauncher.cfg"
 touch "$PRISM_CFG"
 for kv in "AutoUpdate=false" "UpdateChannel=" "CheckForUpdates=false" "Language=uk_UA" "AnalyticsSeen=1"; do
     key="${kv%%=*}"
@@ -249,7 +250,7 @@ if [[ -d "$MRPACK_DIR/overrides" ]]; then
 fi
 
 # --- 3.6. Офлайн-акаунт ---
-ACCOUNTS_PATH="$PRISM_DIR/Prism Launcher.app/Contents/MacOS/accounts.json"
+ACCOUNTS_PATH="$PRISM_DIR/accounts.json"
 step "Офлайн-акаунт"
 if [[ -f "$ACCOUNTS_PATH" ]]; then
     ok "Акаунт вже налаштовано"
