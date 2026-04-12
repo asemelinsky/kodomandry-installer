@@ -174,21 +174,19 @@ if (-not $javaExe) {
     }
 }
 
-# --- 3.5. Створення instance з модпаком ---
-Write-Step "Створення збірки '$InstanceName'"
+# --- 3.5. Збірка + синхронізація модпаку ---
+Write-Step "Синхронізація збірки '$InstanceName'"
 
 $mcDir = Join-Path $InstanceDir '.minecraft'
 $modsDir = Join-Path $mcDir 'mods'
 $instanceCfg = Join-Path $InstanceDir 'instance.cfg'
+New-Dir $InstanceDir
+New-Dir $mcDir
+New-Dir $modsDir
 
-if (Test-Path (Join-Path $InstanceDir 'mmc-pack.json')) {
-    Write-Ok "Збірка вже існує — пропускаю"
-} else {
-    New-Dir $InstanceDir
-    New-Dir $mcDir
-    New-Dir $modsDir
-
-    # mmc-pack.json
+# Конфіги інстансу — створюємо якщо нема (не чіпаємо якщо юзер міняв)
+$mmcPackPath = Join-Path $InstanceDir 'mmc-pack.json'
+if (-not (Test-Path $mmcPackPath)) {
     $mmcPack = @'
 {
     "components": [
@@ -198,9 +196,9 @@ if (Test-Path (Join-Path $InstanceDir 'mmc-pack.json')) {
     "formatVersion": 1
 }
 '@
-    Set-Content -Path (Join-Path $InstanceDir 'mmc-pack.json') -Value $mmcPack -Encoding UTF8
-
-    # instance.cfg
+    Set-Content -Path $mmcPackPath -Value $mmcPack -Encoding UTF8
+}
+if (-not (Test-Path $instanceCfg)) {
     $instCfg = @"
 InstanceType=OneSix
 OverrideMemory=true
@@ -211,48 +209,65 @@ name=$InstanceName
 notes=Server: 46.225.227.42:25566\nNeoForge 21.1.216
 "@
     Set-Content -Path $instanceCfg -Value $instCfg -Encoding UTF8
-    Write-Ok "Конфіги створено"
+}
 
-    # Завантаження .mrpack
-    $mrpackPath = Join-Path $TempDir 'kodomandry.mrpack'
-    Write-Host "  Завантаження модпаку..."
-    Download-File $ModpackUrl $mrpackPath
-    Write-Ok "Модпак завантажено ($([math]::Round((Get-Item $mrpackPath).Length/1MB,1)) MB)"
+# Завантаження .mrpack (завжди свіжий)
+$mrpackPath = Join-Path $TempDir 'kodomandry.mrpack'
+Write-Host "  Завантаження модпаку..."
+Download-File $ModpackUrl $mrpackPath
 
-    # Розпакування .mrpack (це ZIP, але Expand-Archive вимагає .zip розширення)
-    $mrpackExtract = Join-Path $TempDir 'mrpack'
-    if (Test-Path $mrpackExtract) { Remove-Item $mrpackExtract -Recurse -Force }
-    New-Dir $mrpackExtract
-    $mrpackZip = "$mrpackPath.zip"
-    Copy-Item $mrpackPath $mrpackZip -Force
-    Expand-Archive -Path $mrpackZip -DestinationPath $mrpackExtract -Force
+# Розпакування
+$mrpackExtract = Join-Path $TempDir 'mrpack'
+if (Test-Path $mrpackExtract) { Remove-Item $mrpackExtract -Recurse -Force }
+New-Dir $mrpackExtract
+$mrpackZip = "$mrpackPath.zip"
+Copy-Item $mrpackPath $mrpackZip -Force
+Expand-Archive -Path $mrpackZip -DestinationPath $mrpackExtract -Force
 
-    # Парсинг index
-    $index = Get-Content (Join-Path $mrpackExtract 'modrinth.index.json') -Raw | ConvertFrom-Json
-    $total = $index.files.Count
-    Write-Host "  Завантаження $total модів..."
-    $i = 0
-    foreach ($file in $index.files) {
-        $i++
-        $target = Join-Path $mcDir $file.path
-        $targetDir = Split-Path $target -Parent
-        New-Dir $targetDir
-        if (Test-Path $target) {
-            Write-Host "    [$i/$total] $(Split-Path $file.path -Leaf) — пропуск"
-            continue
+# Парсинг index
+$index = Get-Content (Join-Path $mrpackExtract 'modrinth.index.json') -Raw | ConvertFrom-Json
+
+# Очікуваний набір повних шляхів до модів
+$expected = @{}
+foreach ($file in $index.files) {
+    $expected[(Join-Path $mcDir $file.path)] = $true
+}
+
+# Видалити сторонні .jar з mods/ (старі версії після оновлення)
+$removed = 0
+if (Test-Path $modsDir) {
+    Get-ChildItem $modsDir -Filter '*.jar' -File | ForEach-Object {
+        if (-not $expected.ContainsKey($_.FullName)) {
+            Remove-Item $_.FullName -Force
+            Write-Host "    - видалено: $($_.Name)"
+            $removed++
         }
-        $url = $file.downloads[0]
-        Write-Host "    [$i/$total] $(Split-Path $file.path -Leaf)"
-        Download-File $url $target
     }
-    Write-Ok "Моди завантажено"
+}
 
-    # Overrides
-    $overridesDir = Join-Path $mrpackExtract 'overrides'
-    if (Test-Path $overridesDir) {
-        Copy-Item -Path (Join-Path $overridesDir '*') -Destination $mcDir -Recurse -Force
-        Write-Ok "Конфіги/ресурси застосовано"
+# Докачати відсутні
+$total = $index.files.Count
+$i = 0; $downloaded = 0; $skipped = 0
+foreach ($file in $index.files) {
+    $i++
+    $target = Join-Path $mcDir $file.path
+    $targetDir = Split-Path $target -Parent
+    New-Dir $targetDir
+    if (Test-Path $target) {
+        $skipped++
+        continue
     }
+    Write-Host "    [$i/$total] $(Split-Path $file.path -Leaf)"
+    Download-File $file.downloads[0] $target
+    $downloaded++
+}
+Write-Ok "Синхронізовано: +$downloaded нових, -$removed старих, $skipped без змін"
+
+# Overrides — завжди перезаписуємо
+$overridesDir = Join-Path $mrpackExtract 'overrides'
+if (Test-Path $overridesDir) {
+    Copy-Item -Path (Join-Path $overridesDir '*') -Destination $mcDir -Recurse -Force
+    Write-Ok "Overrides (конфіги + servers.dat) оновлено"
 }
 
 # --- 4. Ярлик на робочому столі ---

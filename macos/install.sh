@@ -166,12 +166,10 @@ step "Створення збірки '$INSTANCE_NAME'"
 
 MC_DIR="$INSTANCE_DIR/.minecraft"
 MODS_DIR="$MC_DIR/mods"
+mkdir -p "$INSTANCE_DIR" "$MC_DIR" "$MODS_DIR"
 
-if [[ -f "$INSTANCE_DIR/mmc-pack.json" ]]; then
-    ok "Збірка вже існує — пропускаю"
-else
-    mkdir -p "$INSTANCE_DIR" "$MC_DIR" "$MODS_DIR"
-
+# Конфіги — тільки якщо нема
+if [[ ! -f "$INSTANCE_DIR/mmc-pack.json" ]]; then
     cat > "$INSTANCE_DIR/mmc-pack.json" <<'EOF'
 {
     "components": [
@@ -181,7 +179,8 @@ else
     "formatVersion": 1
 }
 EOF
-
+fi
+if [[ ! -f "$INSTANCE_DIR/instance.cfg" ]]; then
     cat > "$INSTANCE_DIR/instance.cfg" <<EOF
 InstanceType=OneSix
 OverrideMemory=true
@@ -191,46 +190,62 @@ iconKey=default
 name=$INSTANCE_NAME
 notes=Server: 46.225.227.42:25566\nNeoForge 21.1.216
 EOF
-    ok "Конфіги створено"
+fi
 
-    # Завантаження .mrpack
-    MRPACK="$TEMP_DIR/kodomandry.mrpack"
-    echo "  Завантаження модпаку..."
-    download "$MODPACK_URL" "$MRPACK"
+# Завантаження .mrpack (завжди свіжий)
+MRPACK="$TEMP_DIR/kodomandry.mrpack"
+echo "  Завантаження модпаку..."
+download "$MODPACK_URL" "$MRPACK"
 
-    # Розпакування (mrpack = zip)
-    MRPACK_DIR="$TEMP_DIR/mrpack"
-    rm -rf "$MRPACK_DIR"; mkdir -p "$MRPACK_DIR"
-    unzip -q "$MRPACK" -d "$MRPACK_DIR"
+MRPACK_DIR="$TEMP_DIR/mrpack"
+rm -rf "$MRPACK_DIR"; mkdir -p "$MRPACK_DIR"
+unzip -q "$MRPACK" -d "$MRPACK_DIR"
 
-    # Парсинг index і завантаження модів
-    python3 - "$MRPACK_DIR/modrinth.index.json" "$MC_DIR" <<'PYEOF'
+# Sync: видалити старі, докачати нові
+python3 - "$MRPACK_DIR/modrinth.index.json" "$MC_DIR" "$MODS_DIR" <<'PYEOF'
 import json, os, subprocess, sys
-idx_path, mc_dir = sys.argv[1], sys.argv[2]
+idx_path, mc_dir, mods_dir = sys.argv[1], sys.argv[2], sys.argv[3]
 with open(idx_path) as f:
     idx = json.load(f)
+
+expected = {os.path.join(mc_dir, f["path"]) for f in idx["files"]}
+
+# Видалити .jar, яких нема в новому index
+removed = 0
+if os.path.isdir(mods_dir):
+    for name in os.listdir(mods_dir):
+        if not name.endswith(".jar"): continue
+        full = os.path.join(mods_dir, name)
+        if full not in expected:
+            os.remove(full)
+            print(f"    - видалено: {name}")
+            removed += 1
+
+# Докачати відсутні
 total = len(idx["files"])
+downloaded = skipped = 0
 for i, f in enumerate(idx["files"], 1):
     target = os.path.join(mc_dir, f["path"])
     name = os.path.basename(f["path"])
     os.makedirs(os.path.dirname(target), exist_ok=True)
     if os.path.exists(target):
-        print(f"    [{i}/{total}] {name} — пропуск")
+        skipped += 1
         continue
-    url = f["downloads"][0]
     print(f"    [{i}/{total}] {name}")
     subprocess.check_call([
         "curl", "-L", "--fail", "--retry", "3", "--progress-bar",
-        "-o", target, url
+        "-o", target, f["downloads"][0]
     ])
-PYEOF
-    ok "Моди завантажено"
+    downloaded += 1
 
-    # Overrides
-    if [[ -d "$MRPACK_DIR/overrides" ]]; then
-        cp -R "$MRPACK_DIR/overrides/"* "$MC_DIR/" 2>/dev/null || true
-        ok "Конфіги/ресурси застосовано"
-    fi
+print(f"    +{downloaded} нових, -{removed} старих, {skipped} без змін")
+PYEOF
+ok "Моди синхронізовано"
+
+# Overrides — завжди перезаписуємо
+if [[ -d "$MRPACK_DIR/overrides" ]]; then
+    cp -R "$MRPACK_DIR/overrides/"* "$MC_DIR/" 2>/dev/null || true
+    ok "Overrides (конфіги + servers.dat) оновлено"
 fi
 
 # --- 3.6. Офлайн-акаунт ---
