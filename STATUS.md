@@ -1,88 +1,73 @@
 # Kodomandry Installer — статус і план
 
-**Останнє оновлення:** 2026-04-12
+**Останнє оновлення:** 2026-04-12 (вечір)
+**Реліз:** `v2026.04.12-5`
 
-## ✅ Зроблено (Windows PoC v0.1)
+## ✅ Готово
 
-### `windows/install.cmd` + `windows/install.ps1`
-Один клік на `install.cmd` виконує все:
+### Windows (`windows/install.cmd` + `install.ps1`)
+Протестовано на живому компі, працює end-to-end.
 
-1. Створює `%LOCALAPPDATA%\Kodomandry\`
-2. Качає **Prism Launcher Cracked** (Diegiwg) portable ZIP з latest GitHub release → розпаковує у `PrismLauncher\`
-3. Активує portable-режим (`portable.txt`)
-4. Пише `prismlauncher.cfg` з `AutoUpdate=false` (але cracked-форк все одно показує діалог — документовано як "натиснути No")
-5. Перевіряє Java 21: system PATH → локальна → завантажує Temurin JRE 21 з Adoptium API
-6. **Створює готову збірку `Kodomandry 1.21.1`** (NeoForge 21.1.216):
-   - `instance.cfg` + `mmc-pack.json`
-   - Качає `.mrpack` з `github.com/asemelinsky/kodomandy-modpack/releases/latest`
-   - Парсить `modrinth.index.json`, качає всі моди з Modrinth CDN (~19 шт, Cobblemon ~128 MB)
-   - Застосовує `overrides/` (`servers.dat` з пре-конфігурованим `46.225.227.42:25566` + конфіги)
-7. Ярлик **Kodomandry Minecraft** на робочому столі + у Start Menu
-8. Питає `Запустити Prism зараз? [Y/n]`
+### macOS (`macos/install.sh`)
+Адаптивно для Apple Silicon / Intel. Асет `.zip`. Знімає Gatekeeper-карантин.
+*Потребує ще одного прогону тесту після останнього фіксу.*
 
-### Технічні рішення
-- **`.cmd` wrapper** — обхід ExecutionPolicy + вікно не закривається
-- **UTF-8 BOM** у `.ps1` — PowerShell 5.1 правильно читає кирилицю
-- **`curl.exe`** замість `Invoke-WebRequest` — надійніші завантаження + прогрес-бар
-- **`trap`** — показує помилки перед закриттям вікна
-- **Ідемпотентність** — повторний запуск пропускає вже встановлене
+### Що роблять скрипти (один флоу — і встановлення, і оновлення)
 
-### Документація
-- `windows/README.md` — як запускати + що робить/не робить
-- `/root/projects/minecraft/docs/launcher-setup.md` — інструкція для учнів (оновлена під новий флоу)
+1. Створюють `%LOCALAPPDATA%\Kodomandry\` / `~/Library/Application Support/Kodomandry/`
+2. Prism Launcher Cracked (portable) — ставлять якщо нема
+3. Java 21 Temurin — перевіряють system/local/качають якщо нема
+4. Prism config: portable + `Language=uk_UA` + `AutoUpdate=false`
+5. Створюють збірку `Kodomandry 1.21.1` (NeoForge 21.1.216) якщо нема
+6. **Завжди** качають свіжий `.mrpack` і **синхронізують моди**:
+   - видаляють старі `.jar` (яких більше нема в модпаку)
+   - докачують нові/відсутні
+   - ті що співпадають — пропускають
+7. Overrides (`servers.dat` + конфіги) — завжди перезаписують найсвіжішою версією
+8. **Автогенерація офлайн-акаунта** через запит нікнейму (стандартний offline UUID = MD5 від `OfflinePlayer:<name>`)
+9. Ярлик `Kodomandry Minecraft` на робочому столі + Start Menu (Win) / `/Applications/` (Mac)
+10. Пропонують запустити Prism
 
----
+### Дистрибуція
+- **Репо:** https://github.com/asemelinsky/kodomandry-installer
+- **Релізи:** автоматично через `publish.sh` (версія `yyyy.mm.dd-N`)
+- **Стабільні лінки** (не ламаються при новому релізі):
+  - https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/kodomandry-installer-windows.zip
+  - https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/kodomandry-installer-macos.zip
+
+### Сайт для учнів (https://kodomandry-minecraft.vercel.app)
+- Блок **"📥 Скачати, Навчатись, Грати"** зверху над модами
+- Дві картки: Windows (стабільна) і macOS (beta)
+- Лінки ведуть на `releases/latest` — не треба оновлювати сайт після кожного релізу інсталятора
+
+### Допоміжне
+- `scripts/sync-mods.py` — утиліта для синхронізації версій модів у `students-site/app/data/mods.ts` з модпаку (звіт + auto-commit)
+- `publish.sh` — one-shot команда: zip → commit → tag → push → GitHub Release
+- `.gitignore` для `dist/`
 
 ## ⏳ Залишилось
 
-### Ручний крок у юзера
-- **Додати офлайн-акаунт** (Accounts → Manage → Add Offline → нікнейм)
-
-### Не зроблено
-- [ ] Дистрибуція інсталятора (як учні його отримають)
-- [ ] `.exe` пакування (ps2exe)
-- [ ] Автоматичне створення офлайн-акаунта
-- [ ] Кастомна `.ico` іконка
-- [ ] macOS / Linux версії
-- [ ] Довести rename `kodomandy → kodomandry` (репо + файл у релізі)
-
----
-
-## 📋 План наступних кроків
-
-### 1. Дистрибуція (БЛОКЕР — без цього учні не отримають інсталятор)
-**Опції:**
-- **A.** GitHub Release у репо `kodomandry-installer` → ZIP з папкою `windows/`
-- **B.** На VPS: `skillbridge.pp.ua/download/kodomandry-installer.zip`
-
-**Рекомендація:** A (GitHub Release) — однакове місце з модпаком, версіонування.
-
-### 2. Автоматичне створення офлайн-акаунта
-**Потрібно:** вміст `%LOCALAPPDATA%\Kodomandry\PrismLauncher\accounts.json` після ручного Add Offline на тестовому компі (можна замінити нік/UUID на фейкові).
-
-**Далі:** додати у `install.ps1` функцію `New-OfflineAccount -Nickname` що генерує коректний JSON.
-
-### 3. Пакування в `.exe` (ps2exe)
-Один файл `kodomandry-installer.exe` замість папки з `.cmd`+`.ps1`.
-**Мінус:** SmartScreen "Unknown publisher" — треба попередити учнів "More info → Run anyway".
-
-### 4. Кастомна іконка
-Потрібен `.ico` файл у `assets/`. Розкоментувати `$shortcut.IconLocation` у `install.ps1`.
-
-### 5. Rename `kodomandy → kodomandry`
-- Переіменувати репо на GitHub
-- Перезалити asset у релізі як `kodomandry-server2.mrpack`
-- Поміняти URL у `install.ps1`
-
-### 6. macOS / Linux
-Якщо в когось з учнів не Windows. Структура та сама, тільки shell-скрипт + Prism AppImage/.tar.gz.
-
----
+- [ ] **Фінальний тест macOS** після останнього фіксу (використання `.zip` замість `.tar.gz`)
+- [ ] **Перевірка флоу оновлення** — випустити v1.4 модпаку і перевірити що install.cmd видалить старі моди і докачає нові
+- [ ] Rename `kodomandy → kodomandry` на GitHub (репо модпаку + asset name)
+- [ ] Кастомна іконка: `.ico` для Windows ярлика + `.icns` для Mac
+- [ ] Пакування в `.exe` через ps2exe (опційно, з'явиться SmartScreen)
+- [ ] Обхід "Update available" промпта у cracked-форку (зараз просто пишемо "натисни No")
 
 ## 🔗 Ключові посилання
 
-- Модпак URL: `https://github.com/asemelinsky/kodomandy-modpack/releases/latest/download/kodomandy-server2.mrpack`
-- Prism Cracked: `https://github.com/Diegiwg/PrismLauncher-Cracked/releases`
-- Сервер: `46.225.227.42:25566` (NeoForge 1.21.1, 19 модів)
-- Інсталятор: `/root/projects/kodomandry-installer/windows/`
-- Модпак (source): `/root/projects/minecraft/modpack/`
+- **Інсталятор:** `/root/projects/minecraft/installer/`
+- **GitHub:** https://github.com/asemelinsky/kodomandry-installer
+- **Сайт:** https://kodomandry-minecraft.vercel.app
+- **Модпак:** `/root/projects/minecraft/modpack/` → `asemelinsky/kodomandy-modpack`
+- **Сервер:** `46.225.227.42:25566`
+- **Prism Cracked:** https://github.com/Diegiwg/PrismLauncher-Cracked/releases
+- **Temurin JRE 21:** https://api.adoptium.net/v3/assets/latest/21/hotspot
+
+## 📦 Історія релізів
+
+- `v2026.04.12-5` — sync mods на кожному запуску (установка == оновлення)
+- `v2026.04.12-4` — fix macOS (.zip asset)
+- `v2026.04.12-3` — автостворення офлайн-акаунта
+- `v2026.04.12-2` — перший реліз з macOS
+- `v2026.04.12-1` — перший реліз Windows
