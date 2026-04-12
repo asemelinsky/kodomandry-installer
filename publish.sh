@@ -44,8 +44,8 @@ echo "  ✓ ${WIN_ZIP} ($(du -h "$WIN_ZIP" | cut -f1))"
 
 MAC_ZIP="${OUT_DIR}/kodomandry-installer-macos.zip"
 echo "→ Пакування macOS..."
-chmod +x macos/install.sh
-(cd macos && zip -r "../${MAC_ZIP}" install.sh README.md)
+chmod +x macos/install.command
+(cd macos && zip -r "../${MAC_ZIP}" install.command README.md)
 echo "  ✓ ${MAC_ZIP} ($(du -h "$MAC_ZIP" | cut -f1))"
 
 # TODO: macOS коли буде готово

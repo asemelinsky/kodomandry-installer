@@ -55,7 +55,7 @@ mkdir -p "$INSTALL_DIR" "$TEMP_DIR"
 # --- 2. Prism Launcher ---
 step "Перевірка Prism Launcher"
 
-PRISM_EXEC="$PRISM_DIR/PrismLauncher.app/Contents/MacOS/prismlauncher"
+PRISM_EXEC="$PRISM_DIR/Prism Launcher.app/Contents/MacOS/prismlauncher"
 if [[ -x "$PRISM_EXEC" ]]; then
     ok "Prism вже встановлено"
 else
@@ -83,8 +83,8 @@ for a in data['assets']:
 
     if [[ ! -x "$PRISM_EXEC" ]]; then
         # Можливо .app у корені архіву
-        APP_FOUND=$(find "$PRISM_DIR" -maxdepth 3 -name 'PrismLauncher.app' -print -quit)
-        if [[ -n "$APP_FOUND" && "$APP_FOUND" != "$PRISM_DIR/PrismLauncher.app" ]]; then
+        APP_FOUND=$(find "$PRISM_DIR" -maxdepth 3 -name 'Prism Launcher.app' -print -quit)
+        if [[ -n "$APP_FOUND" && "$APP_FOUND" != "$PRISM_DIR/Prism Launcher.app" ]]; then
             mv "$APP_FOUND" "$PRISM_DIR/"
         fi
     fi
@@ -92,19 +92,19 @@ for a in data['assets']:
     if [[ -x "$PRISM_EXEC" ]]; then
         ok "Prism встановлено"
     else
-        echo "✗ PrismLauncher.app не знайдено після розпакування"; exit 1
+        echo "✗ Prism Launcher.app не знайдено після розпакування"; exit 1
     fi
 
     # Зняти карантин (щоб Gatekeeper не блокував)
-    xattr -dr com.apple.quarantine "$PRISM_DIR/PrismLauncher.app" 2>/dev/null || true
+    xattr -dr com.apple.quarantine "$PRISM_DIR/Prism Launcher.app" 2>/dev/null || true
 fi
 
 # Portable-режим — файл-маркер
-PORTABLE_FLAG="$PRISM_DIR/PrismLauncher.app/Contents/MacOS/portable.txt"
+PORTABLE_FLAG="$PRISM_DIR/Prism Launcher.app/Contents/MacOS/portable.txt"
 touch "$PORTABLE_FLAG"
 
 # Конфіг
-PRISM_CFG="$PRISM_DIR/PrismLauncher.app/Contents/MacOS/prismlauncher.cfg"
+PRISM_CFG="$PRISM_DIR/Prism Launcher.app/Contents/MacOS/prismlauncher.cfg"
 touch "$PRISM_CFG"
 for kv in "AutoUpdate=false" "UpdateChannel=" "CheckForUpdates=false" "Language=uk_UA" "AnalyticsSeen=1"; do
     key="${kv%%=*}"
@@ -249,7 +249,7 @@ if [[ -d "$MRPACK_DIR/overrides" ]]; then
 fi
 
 # --- 3.6. Офлайн-акаунт ---
-ACCOUNTS_PATH="$PRISM_DIR/PrismLauncher.app/Contents/MacOS/accounts.json"
+ACCOUNTS_PATH="$PRISM_DIR/Prism Launcher.app/Contents/MacOS/accounts.json"
 step "Офлайн-акаунт"
 if [[ -f "$ACCOUNTS_PATH" ]]; then
     ok "Акаунт вже налаштовано"
@@ -300,11 +300,11 @@ APP_LINK="/Applications/$APP_NAME Minecraft.app"
 if [[ -e "$APP_LINK" || -L "$APP_LINK" ]]; then
     rm -f "$APP_LINK"
 fi
-ln -s "$PRISM_DIR/PrismLauncher.app" "$APP_LINK" 2>/dev/null || {
+ln -s "$PRISM_DIR/Prism Launcher.app" "$APP_LINK" 2>/dev/null || {
     # Якщо /Applications захищений без sudo — кладемо на Desktop
     APP_LINK="$HOME/Desktop/$APP_NAME Minecraft.app"
     rm -f "$APP_LINK"
-    ln -s "$PRISM_DIR/PrismLauncher.app" "$APP_LINK"
+    ln -s "$PRISM_DIR/Prism Launcher.app" "$APP_LINK"
     warn "Немає доступу до /Applications — ярлик на робочому столі"
 }
 ok "Ярлик: $APP_LINK"
@@ -336,6 +336,6 @@ echo
 read -r -p "Запустити Prism Launcher зараз? [Y/n] " LAUNCH
 LAUNCH=${LAUNCH:-Y}
 if [[ "$LAUNCH" =~ ^[Yy]$ ]]; then
-    open "$PRISM_DIR/PrismLauncher.app"
+    open "$PRISM_DIR/Prism Launcher.app"
     ok "Prism запущено"
 fi

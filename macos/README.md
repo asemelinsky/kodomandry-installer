@@ -2,17 +2,20 @@
 
 ## Запуск
 
+**Подвійний клік на `install.command`** у Finder — відкриється Terminal і запустить.
+
+Або з терміналу:
 ```bash
-chmod +x install.sh
-./install.sh
+./install.command
 ```
 
-Або просто двічі клікнути `install.sh` у Finder — відкриється Terminal і виконає.
+> Якщо macOS каже "cannot be opened because it is from an unidentified developer" —
+> System Settings → Privacy & Security → "Open Anyway", або правий клік → Open.
 
 ## Що робить
 
 1. Створює `~/Library/Application Support/Kodomandry/`
-2. Качає Prism Launcher Cracked (macOS `.tar.gz`)
+2. Качає Prism Launcher Cracked (macOS `.zip`)
 3. Знімає `com.apple.quarantine` (щоб Gatekeeper не блокував)
 4. Активує portable-режим + `prismlauncher.cfg` з `Language=uk_UA`, `AutoUpdate=false`
 5. Перевіряє Java 21 (system → local → Temurin JRE 21 для `aarch64` або `x64`)
