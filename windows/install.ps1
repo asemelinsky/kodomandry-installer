@@ -278,6 +278,57 @@ $startLnk.Description      = "$AppName Minecraft Launcher"
 $startLnk.Save()
 Write-Ok "Додано у меню Пуск"
 
+# --- 4.5. Офлайн-акаунт ---
+$accountsPath = Join-Path $PrismDir 'accounts.json'
+if (Test-Path $accountsPath) {
+    Write-Step "Офлайн-акаунт"
+    Write-Ok "Акаунт вже налаштовано"
+} else {
+    Write-Step "Офлайн-акаунт"
+    Write-Host "  Нікнейм буде видимий у грі і в сервері для інших гравців."
+    do {
+        $nick = Read-Host "  Введи нікнейм (3-16 символів, латиниця/цифри/_)"
+        $nick = $nick.Trim()
+    } until ($nick -match '^[A-Za-z0-9_]{3,16}$')
+
+    # Minecraft offline UUID: MD5("OfflinePlayer:<name>") with version=3 + variant=RFC4122
+    $md5 = [System.Security.Cryptography.MD5]::Create()
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes("OfflinePlayer:$nick")
+    $hash = $md5.ComputeHash($bytes)
+    $hash[6] = ($hash[6] -band 0x0F) -bor 0x30  # version 3
+    $hash[8] = ($hash[8] -band 0x3F) -bor 0x80  # RFC 4122 variant
+    $profileId = ([System.BitConverter]::ToString($hash) -replace '-', '').ToLower()
+
+    $clientToken = [guid]::NewGuid().ToString('N')
+    $iat = [int][double]::Parse((Get-Date -UFormat %s))
+
+    $accountsObj = @{
+        formatVersion = 3
+        accounts = @(@{
+            active = $true
+            type = 'Offline'
+            profile = @{
+                id = $profileId
+                name = $nick
+                capes = @()
+                skin = @{ id = ''; url = ''; variant = '' }
+            }
+            ygg = @{
+                iat = $iat
+                token = '0'
+                extra = @{
+                    clientToken = $clientToken
+                    userName = $nick
+                }
+            }
+        })
+    }
+
+    $accountsJson = $accountsObj | ConvertTo-Json -Depth 10
+    [System.IO.File]::WriteAllText($accountsPath, $accountsJson, [System.Text.UTF8Encoding]::new($false))
+    Write-Ok "Акаунт '$nick' створено"
+}
+
 # --- 5. Прибирання ---
 Write-Step "Прибирання тимчасових файлів"
 Remove-Item $TempDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -295,12 +346,8 @@ Write-Host ""
 Write-Host "  2. Якщо з'явиться діалог 'A new version is available' —"
 Write-Host "     натисни 'No' / 'Skip' (НЕ оновлювати!)"
 Write-Host ''
-Write-Host "  3. Додай офлайн-акаунт (робиться один раз):"
-Write-Host "     Accounts (правий верхній кут) -> Manage Accounts -> Add Offline"
-Write-Host "     Введи свій нікнейм (латиницею)"
-Write-Host ''
-Write-Host "  4. Обери збірку '$InstanceName' -> Launch"
-Write-Host "     Сервер 46.225.227.42:25566 вже в списку Multiplayer"
+Write-Host "  3. Обери збірку '$InstanceName' -> Launch"
+Write-Host "     Акаунт і сервер 46.225.227.42:25566 уже налаштовані"
 Write-Host ''
 Write-Host "  Java: $javaExe"
 Write-Host "  Prism: $prismExe"

@@ -233,6 +233,52 @@ PYEOF
     fi
 fi
 
+# --- 3.6. Офлайн-акаунт ---
+ACCOUNTS_PATH="$PRISM_DIR/PrismLauncher.app/Contents/MacOS/accounts.json"
+step "Офлайн-акаунт"
+if [[ -f "$ACCOUNTS_PATH" ]]; then
+    ok "Акаунт вже налаштовано"
+else
+    echo "  Нікнейм буде видимий у грі та на сервері."
+    while true; do
+        read -r -p "  Введи нікнейм (3-16 символів, латиниця/цифри/_): " NICK
+        NICK="${NICK// /}"
+        if [[ "$NICK" =~ ^[A-Za-z0-9_]{3,16}$ ]]; then break; fi
+        warn "Невалідний нік, спробуй ще."
+    done
+
+    python3 - "$NICK" "$ACCOUNTS_PATH" <<'PYEOF'
+import hashlib, json, sys, time, uuid
+nick, out = sys.argv[1], sys.argv[2]
+# Minecraft offline UUID: MD5("OfflinePlayer:<name>") with v3 + RFC4122 variant
+h = bytearray(hashlib.md5(f"OfflinePlayer:{nick}".encode()).digest())
+h[6] = (h[6] & 0x0F) | 0x30
+h[8] = (h[8] & 0x3F) | 0x80
+profile_id = h.hex()
+data = {
+    "formatVersion": 3,
+    "accounts": [{
+        "active": True,
+        "type": "Offline",
+        "profile": {
+            "id": profile_id,
+            "name": nick,
+            "capes": [],
+            "skin": {"id": "", "url": "", "variant": ""},
+        },
+        "ygg": {
+            "iat": int(time.time()),
+            "token": "0",
+            "extra": {"clientToken": uuid.uuid4().hex, "userName": nick},
+        },
+    }],
+}
+with open(out, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=4, ensure_ascii=False)
+PYEOF
+    ok "Акаунт '$NICK' створено"
+fi
+
 # --- 4. Ярлик в /Applications (symlink) ---
 step "Створення ярлика"
 APP_LINK="/Applications/$APP_NAME Minecraft.app"
@@ -265,11 +311,8 @@ echo
 echo "  2. Якщо з'явиться діалог 'A new version is available' —"
 echo "     натисни 'No' / 'Skip' (НЕ оновлювати!)"
 echo
-echo "  3. Додай офлайн-акаунт (один раз):"
-echo "     Accounts -> Manage Accounts -> Add Offline -> нікнейм (латиницею)"
-echo
-echo "  4. Обери '$INSTANCE_NAME' -> Launch"
-echo "     Сервер 46.225.227.42:25566 вже в списку Multiplayer"
+echo "  3. Обери '$INSTANCE_NAME' -> Launch"
+echo "     Акаунт і сервер 46.225.227.42:25566 уже налаштовані"
 echo
 echo "  Java: $JAVA_EXE"
 echo "  Prism: $PRISM_EXEC"
