@@ -16,7 +16,7 @@ TEMP_DIR="/tmp/$APP_NAME-install"
 
 PRISM_API="https://api.github.com/repos/Diegiwg/PrismLauncher-Cracked/releases/latest"
 # macOS universal tarball
-PRISM_ASSET_PATTERN='PrismLauncher-macOS-.*\.tar\.gz$'
+PRISM_ASSET_PATTERN='PrismLauncher-macOS-[0-9.]+\.zip$'
 
 MODPACK_URL="https://github.com/asemelinsky/kodomandy-modpack/releases/latest/download/kodomandy-server2.mrpack"
 INSTANCE_NAME="Kodomandry 1.21.1"
@@ -74,12 +74,12 @@ for a in data['assets']:
     fi
     ASSET_NAME="${ASSET_URL##*/}"
     echo "  Версія asset: $ASSET_NAME"
-    TARBALL="$TEMP_DIR/$ASSET_NAME"
-    download "$ASSET_URL" "$TARBALL"
+    ARCHIVE="$TEMP_DIR/$ASSET_NAME"
+    download "$ASSET_URL" "$ARCHIVE"
 
     echo "  Розпакування..."
     mkdir -p "$PRISM_DIR"
-    tar -xzf "$TARBALL" -C "$PRISM_DIR"
+    unzip -q -o "$ARCHIVE" -d "$PRISM_DIR"
 
     if [[ ! -x "$PRISM_EXEC" ]]; then
         # Можливо .app у корені архіву
