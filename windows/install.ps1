@@ -117,15 +117,12 @@ if (-not (Test-Path $portableFlag)) {
     Write-Ok "Активовано portable-режим"
 }
 
-# Вимкнути автооновлення (щоб cracked-форк не пропонував апдейт)
+# Мова + analytics у prismlauncher.cfg
 $prismCfg = Join-Path $PrismDir 'prismlauncher.cfg'
 $cfgLines = if (Test-Path $prismCfg) { Get-Content $prismCfg } else { @() }
 $desired = @{
-    'AutoUpdate'       = 'false'
-    'UpdateChannel'    = ''
-    'CheckForUpdates'  = 'false'
-    'Language'         = 'uk_UA'
-    'AnalyticsSeen'    = '1'
+    'Language'      = 'uk_UA'
+    'AnalyticsSeen' = '1'
 }
 foreach ($key in $desired.Keys) {
     $val = $desired[$key]
@@ -137,6 +134,21 @@ foreach ($key in $desired.Keys) {
     }
 }
 Set-Content -Path $prismCfg -Value $cfgLines -Encoding UTF8
+
+# Автооновлення живе в окремому файлі prismlauncher_update.cfg
+$updateCfg = Join-Path $PrismDir 'prismlauncher_update.cfg'
+$updateCfgContent = @'
+[General]
+auto_check=false
+update_interval=86400
+allow_beta=false
+last_check=2099-01-01T00:00:00
+'@
+Set-Content -Path $updateCfg -Value $updateCfgContent -Encoding UTF8
+
+# Ремінь + підтяжки: прибрати updater бінарник (cracked-форк інколи сам запускає його)
+Get-ChildItem $PrismDir -Filter 'prismlauncher_updater*' -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+
 Write-Ok "Автооновлення вимкнено"
 
 # --- 3. Перевірка / завантаження Java 21 ---
