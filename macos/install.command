@@ -295,17 +295,49 @@ PYEOF
     ok "Акаунт '$NICK' створено"
 fi
 
-# --- 4. Ярлик в /Applications (symlink) ---
+# --- 4. Launcher wrapper + ярлик ---
+# На macOS Prism ігнорує portable.txt поруч із .app і читає дані з
+# ~/Library/Application Support/PrismLauncher/. Тому запускаємо його з
+# флагом -d, який явно вказує на нашу data-папку.
 step "Створення ярлика"
+
+WRAPPER_APP="$INSTALL_DIR/$APP_NAME Minecraft.app"
+WRAPPER_MACOS="$WRAPPER_APP/Contents/MacOS"
+WRAPPER_RES="$WRAPPER_APP/Contents/Resources"
+mkdir -p "$WRAPPER_MACOS" "$WRAPPER_RES"
+
+cat > "$WRAPPER_MACOS/launcher" <<EOF
+#!/bin/bash
+exec "$PRISM_EXEC" -d "$PRISM_DIR" "\$@"
+EOF
+chmod +x "$WRAPPER_MACOS/launcher"
+
+cat > "$WRAPPER_APP/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key><string>launcher</string>
+    <key>CFBundleIdentifier</key><string>club.kodomandry.launcher</string>
+    <key>CFBundleName</key><string>$APP_NAME Minecraft</string>
+    <key>CFBundleDisplayName</key><string>$APP_NAME Minecraft</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleVersion</key><string>1.0</string>
+    <key>CFBundleShortVersionString</key><string>1.0</string>
+    <key>LSMinimumSystemVersion</key><string>10.13</string>
+</dict>
+</plist>
+EOF
+
+# Ярлик в /Applications (symlink на wrapper) або на Desktop
 APP_LINK="/Applications/$APP_NAME Minecraft.app"
 if [[ -e "$APP_LINK" || -L "$APP_LINK" ]]; then
     rm -f "$APP_LINK"
 fi
-ln -s "$PRISM_DIR/Prism Launcher.app" "$APP_LINK" 2>/dev/null || {
-    # Якщо /Applications захищений без sudo — кладемо на Desktop
+ln -s "$WRAPPER_APP" "$APP_LINK" 2>/dev/null || {
     APP_LINK="$HOME/Desktop/$APP_NAME Minecraft.app"
     rm -f "$APP_LINK"
-    ln -s "$PRISM_DIR/Prism Launcher.app" "$APP_LINK"
+    ln -s "$WRAPPER_APP" "$APP_LINK"
     warn "Немає доступу до /Applications — ярлик на робочому столі"
 }
 ok "Ярлик: $APP_LINK"
@@ -337,6 +369,6 @@ echo
 read -r -p "Запустити Prism Launcher зараз? [Y/n] " LAUNCH
 LAUNCH=${LAUNCH:-Y}
 if [[ "$LAUNCH" =~ ^[Yy]$ ]]; then
-    open "$PRISM_DIR/Prism Launcher.app"
+    open "$WRAPPER_APP"
     ok "Prism запущено"
 fi
