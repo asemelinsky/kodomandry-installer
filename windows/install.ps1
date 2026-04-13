@@ -17,6 +17,17 @@ function Download-File($Url, $OutFile) {
     }
 }
 
+function Invoke-Api($Url) {
+    # curl.exe обходить TLS/cipher-проблеми старих Windows (Invoke-RestMethod падає на GitHub API)
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curl) {
+        $json = & curl.exe -sSL --fail --retry 3 --retry-delay 2 -H "User-Agent: $AppName" $Url
+        if ($LASTEXITCODE -ne 0) { throw "curl.exe failed ($LASTEXITCODE) for $Url" }
+        return $json | ConvertFrom-Json
+    }
+    return Invoke-RestMethod -Uri $Url -Headers @{ 'User-Agent' = $AppName }
+}
+
 trap {
     Write-Host ''
     Write-Host "✗ ПОМИЛКА: $($_.Exception.Message)" -ForegroundColor Red
@@ -69,7 +80,7 @@ if (Test-Path $prismExe) {
     Write-Ok "Prism вже встановлено: $prismExe"
 } else {
     Write-Host "  Завантаження інформації про останній реліз..."
-    $release = Invoke-RestMethod -Uri $PrismApi -Headers @{ 'User-Agent' = $AppName }
+    $release = Invoke-Api $PrismApi
     $asset = $release.assets | Where-Object { $_.name -like $PrismAsset } | Select-Object -First 1
     if (-not $asset) { throw "Не знайдено portable ZIP у релізі Prism Cracked" }
 
@@ -154,7 +165,7 @@ if (-not $javaExe) {
 # 3c. Завантажити Temurin JRE 21
 if (-not $javaExe) {
     Write-Host "  Java 21 не знайдена. Завантаження Temurin JRE 21..."
-    $jreInfo = Invoke-RestMethod -Uri $JavaApi -Headers @{ 'User-Agent' = $AppName }
+    $jreInfo = Invoke-Api $JavaApi
     $pkg = $jreInfo[0].binary.package
     Write-Host "  Версія: $($jreInfo[0].release_name), файл: $($pkg.name)"
     $jreZip = Join-Path $TempDir $pkg.name

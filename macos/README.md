@@ -2,15 +2,23 @@
 
 ## Запуск
 
-**Подвійний клік на `install.command`** у Finder — відкриється Terminal і запустить.
+**Подвійний клік на `install.command`** у Finder.
 
-Або з терміналу:
-```bash
-./install.command
-```
+### Якщо macOS блокує (найімовірніше так і буде)
 
-> Якщо macOS каже "cannot be opened because it is from an unidentified developer" —
-> System Settings → Privacy & Security → "Open Anyway", або правий клік → Open.
+З'явиться вікно: *"install.command не відкрито, Apple не може перевірити…"* → натисни **Fertig / Готово**.
+
+Далі:
+1. Відкрий **System Settings / Системні налаштування**
+2. Секція **Privacy & Security / Конфіденційність і безпека**
+3. Прокрути вниз до блоку **Security / Безпека**
+4. Побачиш напис: *"install.command was blocked…"* і кнопку **Open Anyway / Все одно відкрити / Dennoch öffnen**
+5. Натисни її, введи пароль Mac якщо попросить
+6. У діалозі що з'явиться — **Open / Відкрити**
+
+Після цього Terminal запустить установку.
+
+> На macOS Sequoia (15+) правий клік → Open більше не працює — тільки через System Settings.
 
 ## Що робить
 
