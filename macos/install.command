@@ -15,8 +15,17 @@ JAVA_DIR="$INSTALL_DIR/java21"
 TEMP_DIR="/tmp/$APP_NAME-install"
 
 PRISM_API="https://api.github.com/repos/Diegiwg/PrismLauncher-Cracked/releases/latest"
-# macOS universal tarball
-PRISM_ASSET_PATTERN='PrismLauncher-macOS-[0-9.]+\.zip$'
+# Детект macOS: на Big Sur (11) / Catalina (10) беремо Legacy-білд,
+# на 12+ — сучасний. Latest релізи під 12+ не запускаються на Big Sur
+# ("cannot be opened because of a problem" від Gatekeeper).
+MACOS_MAJOR=$(sw_vers -productVersion 2>/dev/null | cut -d. -f1)
+if [[ -n "$MACOS_MAJOR" && "$MACOS_MAJOR" -lt 12 ]]; then
+    PRISM_ASSET_PATTERN='PrismLauncher-macOS-Legacy-v?[0-9.]+\.zip$'
+    PRISM_VARIANT="Legacy (macOS $MACOS_MAJOR)"
+else
+    PRISM_ASSET_PATTERN='PrismLauncher-macOS-v?[0-9.]+\.zip$'
+    PRISM_VARIANT="Modern (macOS $MACOS_MAJOR)"
+fi
 
 MODPACK_URL="https://github.com/asemelinsky/kodomandy-modpack/releases/latest/download/kodomandy-server2.mrpack"
 INSTANCE_NAME="Kodomandry 1.21.1"
