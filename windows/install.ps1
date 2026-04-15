@@ -46,14 +46,34 @@ $JavaDir      = Join-Path $InstallDir 'java21'
 $TempDir      = Join-Path $env:TEMP "$AppName-install"
 
 $PrismApi     = 'https://api.github.com/repos/Diegiwg/PrismLauncher-Cracked/releases/latest'
-$PrismAsset   = 'PrismLauncher-Windows-MSVC-Portable-*.zip'
+
+# Детект архітектури + версії Windows для вибору Prism-білду:
+#   ARM64           → MinGW-arm64-Portable
+#   x64, Win 10/11  → MSVC-Portable (найстабільніший)
+#   x64, Win 7/8/8.1→ MinGW-w64-Portable (MSVC-білди не запускаються на старих Win)
+$WinMajor = [Environment]::OSVersion.Version.Major
+$WinMinor = [Environment]::OSVersion.Version.Minor
+$ArchEnv  = $env:PROCESSOR_ARCHITECTURE  # AMD64 / ARM64 / x86
+if ($ArchEnv -eq 'ARM64') {
+    $PrismAsset = 'PrismLauncher-Windows-MinGW-arm64-Portable-*.zip'
+    $JavaArch   = 'aarch64'
+    $PrismVariant = "MinGW ARM64 (Win $WinMajor.$WinMinor)"
+} elseif ($WinMajor -lt 10) {
+    $PrismAsset = 'PrismLauncher-Windows-MinGW-w64-Portable-*.zip'
+    $JavaArch   = 'x64'
+    $PrismVariant = "MinGW w64 (Win $WinMajor.$WinMinor — legacy)"
+} else {
+    $PrismAsset = 'PrismLauncher-Windows-MSVC-Portable-*.zip'
+    $JavaArch   = 'x64'
+    $PrismVariant = "MSVC (Win $WinMajor.$WinMinor)"
+}
 
 $ModpackUrl   = 'https://github.com/asemelinsky/kodomandy-modpack/releases/latest/download/kodomandy-server2.mrpack'
 $InstanceName = 'Kodomandry 1.21.1'
 $InstanceDir  = Join-Path $PrismDir "instances\Kodomandry"
 
-# Temurin JRE 21 latest x64 Windows ZIP
-$JavaApi      = 'https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64&image_type=jre&os=windows&vendor=eclipse'
+# Temurin JRE 21 latest Windows ZIP (arch залежить від системи)
+$JavaApi      = "https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=$JavaArch&image_type=jre&os=windows&vendor=eclipse"
 
 # --- Утиліти ---
 function Write-Step($msg) { Write-Host ''; Write-Host "==> $msg" -ForegroundColor Cyan }
@@ -74,6 +94,7 @@ New-Dir $TempDir
 
 # --- 2. Завантаження Prism Launcher (portable) ---
 Write-Step "Перевірка Prism Launcher"
+Write-Host "  Варіант для цієї системи: $PrismVariant" -ForegroundColor DarkGray
 
 $prismExe = Join-Path $PrismDir 'prismlauncher.exe'
 if (Test-Path $prismExe) {
