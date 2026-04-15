@@ -122,11 +122,12 @@ ok "Автооновлення вимкнено, мова uk_UA"
 step "Перевірка Java 21"
 
 JAVA_EXE=""
-# Системна java
-if command -v java >/dev/null 2>&1; then
-    VER=$(java -version 2>&1 | head -1)
-    if echo "$VER" | grep -qE 'version "(21|21\.)'; then
-        JAVA_EXE="$(command -v java)"
+# Системна java — через java_home, щоб уникнути stub /usr/bin/java,
+# який на чистому маку тригерить діалог встановлення Command Line Tools.
+if [[ -x /usr/libexec/java_home ]]; then
+    JAVA_HOME_PATH=$(/usr/libexec/java_home -v 21 2>/dev/null || true)
+    if [[ -n "$JAVA_HOME_PATH" && -x "$JAVA_HOME_PATH/bin/java" ]]; then
+        JAVA_EXE="$JAVA_HOME_PATH/bin/java"
         ok "Системна Java 21 знайдена: $JAVA_EXE"
     fi
 fi
