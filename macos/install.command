@@ -61,14 +61,13 @@ if [[ -x "$PRISM_EXEC" ]]; then
 else
     echo "  Завантаження інформації про реліз..."
     RELEASE=$(curl -fsSL -H "User-Agent: $APP_NAME" "$PRISM_API")
-    ASSET_URL=$(echo "$RELEASE" | python3 -c "
-import json, sys, re
-data = json.load(sys.stdin)
-pat = re.compile('$PRISM_ASSET_PATTERN')
-for a in data['assets']:
-    if pat.search(a['name']):
-        print(a['browser_download_url']); break
-")
+    ASSET_URL=$(echo "$RELEASE" | perl -MJSON::PP -0777 -ne '
+my $d = decode_json($_);
+for my $a (@{$d->{assets}}) {
+    if ($a->{name} =~ /'"$PRISM_ASSET_PATTERN"'/) {
+        print $a->{browser_download_url}; last;
+    }
+}')
     if [[ -z "$ASSET_URL" ]]; then
         echo "✗ Не знайдено macOS-ассет у релізі"; exit 1
     fi
@@ -145,8 +144,8 @@ fi
 if [[ -z "$JAVA_EXE" ]]; then
     echo "  Java 21 не знайдена. Завантаження Temurin JRE 21 ($JAVA_ARCH)..."
     JRE_JSON=$(curl -fsSL -H "User-Agent: $APP_NAME" "$JAVA_API")
-    JRE_URL=$(echo "$JRE_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['binary']['package']['link'])")
-    JRE_NAME=$(echo "$JRE_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['binary']['package']['name'])")
+    JRE_URL=$(echo "$JRE_JSON" | perl -MJSON::PP -0777 -ne 'print decode_json($_)->[0]{binary}{package}{link}')
+    JRE_NAME=$(echo "$JRE_JSON" | perl -MJSON::PP -0777 -ne 'print decode_json($_)->[0]{binary}{package}{name}')
     JRE_TAR="$TEMP_DIR/$JRE_NAME"
     download "$JRE_URL" "$JRE_TAR"
 
@@ -204,44 +203,46 @@ rm -rf "$MRPACK_DIR"; mkdir -p "$MRPACK_DIR"
 unzip -q "$MRPACK" -d "$MRPACK_DIR"
 
 # Sync: видалити старі, докачати нові
-python3 - "$MRPACK_DIR/modrinth.index.json" "$MC_DIR" "$MODS_DIR" <<'PYEOF'
-import json, os, subprocess, sys
-idx_path, mc_dir, mods_dir = sys.argv[1], sys.argv[2], sys.argv[3]
-with open(idx_path) as f:
-    idx = json.load(f)
+perl -MJSON::PP -0777 -e '
+use strict; use warnings;
+my ($idx_path, $mc_dir, $mods_dir) = @ARGV;
+open(my $fh, "<", $idx_path) or die "$idx_path: $!";
+my $idx = decode_json(do { local $/; <$fh> });
 
-expected = {os.path.join(mc_dir, f["path"]) for f in idx["files"]}
+my %expected = map { "$mc_dir/$_->{path}" => 1 } @{$idx->{files}};
 
-# Видалити .jar, яких нема в новому index
-removed = 0
-if os.path.isdir(mods_dir):
-    for name in os.listdir(mods_dir):
-        if not name.endswith(".jar"): continue
-        full = os.path.join(mods_dir, name)
-        if full not in expected:
-            os.remove(full)
-            print(f"    - видалено: {name}")
-            removed += 1
+my $removed = 0;
+if (-d $mods_dir) {
+    opendir(my $dh, $mods_dir) or die;
+    for my $name (readdir $dh) {
+        next unless $name =~ /\.jar$/;
+        my $full = "$mods_dir/$name";
+        if (!$expected{$full}) {
+            unlink $full;
+            print "    - видалено: $name\n";
+            $removed++;
+        }
+    }
+}
 
-# Докачати відсутні
-total = len(idx["files"])
-downloaded = skipped = 0
-for i, f in enumerate(idx["files"], 1):
-    target = os.path.join(mc_dir, f["path"])
-    name = os.path.basename(f["path"])
-    os.makedirs(os.path.dirname(target), exist_ok=True)
-    if os.path.exists(target):
-        skipped += 1
-        continue
-    print(f"    [{i}/{total}] {name}")
-    subprocess.check_call([
-        "curl", "-L", "--fail", "--retry", "3", "--progress-bar",
-        "-o", target, f["downloads"][0]
-    ])
-    downloaded += 1
-
-print(f"    +{downloaded} нових, -{removed} старих, {skipped} без змін")
-PYEOF
+my $total = scalar @{$idx->{files}};
+my ($downloaded, $skipped) = (0, 0);
+my $i = 0;
+for my $f (@{$idx->{files}}) {
+    $i++;
+    my $target = "$mc_dir/$f->{path}";
+    my $name = $f->{path}; $name =~ s{.*/}{};
+    my $dir = $target; $dir =~ s{/[^/]+$}{};
+    system("mkdir", "-p", $dir) == 0 or die;
+    if (-e $target) { $skipped++; next; }
+    print "    [$i/$total] $name\n";
+    system("curl", "-L", "--fail", "--retry", "3", "--progress-bar",
+           "-o", $target, $f->{downloads}[0]) == 0
+        or die "curl failed for $name";
+    $downloaded++;
+}
+print "    +$downloaded нових, -$removed старих, $skipped без змін\n";
+' "$MRPACK_DIR/modrinth.index.json" "$MC_DIR" "$MODS_DIR"
 ok "Моди синхронізовано"
 
 # Overrides — завжди перезаписуємо
@@ -264,35 +265,37 @@ else
         warn "Невалідний нік, спробуй ще."
     done
 
-    python3 - "$NICK" "$ACCOUNTS_PATH" <<'PYEOF'
-import hashlib, json, sys, time, uuid
-nick, out = sys.argv[1], sys.argv[2]
-# Minecraft offline UUID: MD5("OfflinePlayer:<name>") with v3 + RFC4122 variant
-h = bytearray(hashlib.md5(f"OfflinePlayer:{nick}".encode()).digest())
-h[6] = (h[6] & 0x0F) | 0x30
-h[8] = (h[8] & 0x3F) | 0x80
-profile_id = h.hex()
-data = {
-    "formatVersion": 3,
-    "accounts": [{
-        "active": True,
-        "type": "Offline",
-        "profile": {
-            "id": profile_id,
-            "name": nick,
-            "capes": [],
-            "skin": {"id": "", "url": "", "variant": ""},
+    perl -MDigest::MD5=md5_hex -MJSON::PP -e '
+use strict; use warnings;
+my ($nick, $out) = @ARGV;
+my $hex = md5_hex("OfflinePlayer:$nick");
+# v3 UUID: set version=3 and RFC4122 variant
+substr($hex, 12, 1) = "3";
+my $v = hex(substr($hex, 16, 1));
+substr($hex, 16, 1) = sprintf("%x", ($v & 0x3) | 0x8);
+my @chars = ("a".."f", 0..9);
+my $client = join "", map { $chars[rand @chars] } 1..32;
+my $data = {
+    formatVersion => 3,
+    accounts => [{
+        active => JSON::PP::true,
+        type   => "Offline",
+        profile => {
+            id    => $hex,
+            name  => $nick,
+            capes => [],
+            skin  => { id => "", url => "", variant => "" },
         },
-        "ygg": {
-            "iat": int(time.time()),
-            "token": "0",
-            "extra": {"clientToken": uuid.uuid4().hex, "userName": nick},
+        ygg => {
+            iat   => time(),
+            token => "0",
+            extra => { clientToken => $client, userName => $nick },
         },
     }],
-}
-with open(out, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=4, ensure_ascii=False)
-PYEOF
+};
+open(my $fh, ">:encoding(UTF-8)", $out) or die "$out: $!";
+print $fh JSON::PP->new->utf8(0)->pretty->indent_length(4)->encode($data);
+' "$NICK" "$ACCOUNTS_PATH"
     ok "Акаунт '$NICK' створено"
 fi
 
