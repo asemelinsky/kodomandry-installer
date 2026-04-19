@@ -392,6 +392,12 @@ cat > "$WRAPPER_APP/Contents/Info.plist" <<EOF
 </plist>
 EOF
 
+# Ad-hoc підпис + чистка xattrs. Без цього macOS 14+ викидає
+# "cannot be opened because of a problem" з кнопками Ignore/Report
+# (без опції Open Anyway — діалог Gatekeeper'а це не починає).
+xattr -cr "$WRAPPER_APP" 2>/dev/null || true
+codesign --force --deep --sign - "$WRAPPER_APP" 2>/dev/null || true
+
 # Ярлик в /Applications (symlink на wrapper) або на Desktop
 APP_LINK="/Applications/$APP_NAME Minecraft.app"
 if [[ -e "$APP_LINK" || -L "$APP_LINK" ]]; then
