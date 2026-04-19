@@ -36,13 +36,18 @@ kodomandry-installer/
 └── STATUS.md         поточний статус + план
 ```
 
-## Як запустити (Windows)
+## Як запустити
 
-1. Скачати ZIP (GitHub Release — TBD) → розпакувати
-2. Подвійний клік на `windows/install.cmd`
-3. Чекати. Якщо Prism покаже "A new version is available" — **No**.
-4. У Prism: Accounts → Add Offline → нікнейм
+**Windows:**
+1. Скачати [`KodomandryInstaller.exe`](https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/KodomandryInstaller.exe) → подвійний клік
+2. Якщо SmartScreen попередить — **More info → Run anyway** (файл ще не підписаний)
+3. Чекати. Якщо Prism покаже "A new version is available" — **No**
+4. Ввести нікнейм коли попросить
 5. Вибрати збірку **Kodomandry 1.21.1** → Launch
+
+**macOS:**
+1. Скачати [`install.command`](https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/install.command) → правий клік → **Відкрити**
+2. Ввести нікнейм коли попросить
 
 ## Константи
 

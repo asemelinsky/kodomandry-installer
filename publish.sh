@@ -1,57 +1,29 @@
 #!/usr/bin/env bash
-# publish.sh — пакує інсталятор і створює GitHub Release.
+# publish.sh — ставить тег і пушить. GitHub Actions сам збирає .exe і робить реліз.
 #
 # Використання:
 #   ./publish.sh            # автогенерована версія yyyy.mm.dd-N
 #   ./publish.sh v1.0.0     # своя версія
 #
-# Залежності: gh (GitHub CLI, автентифікований), zip
-#
-# URL у content/download/windows.md статичні (releases/latest/download/...),
-# тож KB не треба перебудовувати після кожного релізу — лише якщо змінилися тексти.
+# Потрібно: git з доступом до origin.
 
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# --- Перевірки ---
-command -v gh >/dev/null || { echo "✗ gh CLI не знайдено"; exit 1; }
-command -v zip >/dev/null || { echo "✗ zip не знайдено"; exit 1; }
-[ -d .git ] || { echo "✗ Не git-репо. Зроби: git init && gh repo create asemelinsky/kodomandry-installer --public --source=. --push"; exit 1; }
+[ -d .git ] || { echo "✗ Не git-репо"; exit 1; }
 
-# --- Версія ---
 if [ "${1:-}" != "" ]; then
-    VERSION="$1"
+    VERSION="${1#v}"
 else
     DATE=$(date +%Y.%m.%d)
-    N=$(git tag -l "${DATE}-*" | wc -l)
+    N=$(git tag -l "v${DATE}-*" | wc -l)
     VERSION="${DATE}-$((N + 1))"
 fi
-
 TAG="v${VERSION}"
-OUT_DIR="dist"
-WIN_ZIP="${OUT_DIR}/kodomandry-installer-windows.zip"
 
 echo "→ Версія: $TAG"
 
-# --- Пакування ---
-rm -rf "$OUT_DIR"
-mkdir -p "$OUT_DIR"
-
-echo "→ Пакування Windows..."
-(cd windows && zip -r "../${WIN_ZIP}" install.cmd install.ps1 README.md)
-echo "  ✓ ${WIN_ZIP} ($(du -h "$WIN_ZIP" | cut -f1))"
-
-MAC_ZIP="${OUT_DIR}/kodomandry-installer-macos.zip"
-echo "→ Пакування macOS..."
-chmod +x macos/install.command
-(cd macos && zip -r "../${MAC_ZIP}" install.command README.md)
-echo "  ✓ ${MAC_ZIP} ($(du -h "$MAC_ZIP" | cut -f1))"
-
-# TODO: macOS коли буде готово
-# (cd macos && zip -r "../${OUT_DIR}/kodomandry-installer-macos.zip" install.sh README.md)
-
-# --- Коміт статусу (якщо є зміни) ---
 if [ -n "$(git status --porcelain)" ]; then
     echo "→ Коміт поточних змін..."
     git add -A
@@ -59,20 +31,17 @@ if [ -n "$(git status --porcelain)" ]; then
     git push
 fi
 
-# --- Тег + реліз ---
-echo "→ Створення GitHub Release ${TAG}..."
+echo "→ Тег + push → workflow збере і зарелізить..."
 git tag "$TAG"
 git push origin "$TAG"
 
-gh release create "$TAG" \
-    --title "Kodomandry Installer ${VERSION}" \
-    --notes "Windows installer. Подвійний клік на \`install.cmd\` у розпакованій папці.
-
-Див. [README](https://github.com/asemelinsky/kodomandry-installer#readme) для деталей." \
-    "$WIN_ZIP" "$MAC_ZIP"
-
 echo ""
-echo "✓ Готово: https://github.com/asemelinsky/kodomandry-installer/releases/tag/${TAG}"
+echo "✓ Тег запушено. Спостерігай:"
+echo "  https://github.com/asemelinsky/kodomandry-installer/actions"
 echo ""
-echo "  Стабільне посилання для KB (не змінюється):"
-echo "  https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/kodomandry-installer-windows.zip"
+echo "  Коли workflow завершиться, реліз буде тут:"
+echo "  https://github.com/asemelinsky/kodomandry-installer/releases/tag/${TAG}"
+echo ""
+echo "  Стабільні посилання (не ламаються):"
+echo "  https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/KodomandryInstaller.exe"
+echo "  https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/install.command"

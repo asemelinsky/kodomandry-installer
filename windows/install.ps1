@@ -29,11 +29,13 @@ function Invoke-Api($Url) {
 }
 
 trap {
+    $msg = $_.Exception.Message
     Write-Host ''
-    Write-Host "✗ ПОМИЛКА: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "✗ ПОМИЛКА: $msg" -ForegroundColor Red
     Write-Host ''
     Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray
     Write-Host ''
+    Show-Error 'Kodomandry — помилка установки' "Щось пішло не так:`n`n$msg`n`nЗроби скрін цього вікна і покажи вчителю."
     Read-Host "Натисни Enter щоб закрити"
     exit 1
 }
@@ -85,8 +87,118 @@ function New-Dir($path) {
     if (-not (Test-Path $path)) { New-Item -ItemType Directory -Path $path -Force | Out-Null }
 }
 
+# --- GUI-діалоги: діти не читають PowerShell-вікно, тож критичні
+#     повідомлення + введення нікнейма робимо через MessageBox/InputBox ---
+$script:UiLoaded = $false
+function Load-Ui {
+    if ($script:UiLoaded) { return $true }
+    try {
+        Add-Type -AssemblyName PresentationFramework -ErrorAction Stop
+        Add-Type -AssemblyName Microsoft.VisualBasic -ErrorAction Stop
+        $script:UiLoaded = $true
+        return $true
+    } catch {
+        return $false
+    }
+}
+function Show-Alert($title, $message) {
+    if (Load-Ui) {
+        [System.Windows.MessageBox]::Show($message, $title, 'OK', 'Information') | Out-Null
+    } else {
+        Write-Host "[$title] $message"
+    }
+}
+function Show-Error($title, $message) {
+    if (Load-Ui) {
+        [System.Windows.MessageBox]::Show($message, $title, 'OK', 'Error') | Out-Null
+    } else {
+        Write-Host "[$title] $message" -ForegroundColor Red
+    }
+}
+function Show-Confirm($title, $message) {
+    if (Load-Ui) {
+        return [System.Windows.MessageBox]::Show($message, $title, 'YesNo', 'Question') -eq 'Yes'
+    } else {
+        $resp = Read-Host "$message [y/N]"
+        return $resp -match '^[Yy]'
+    }
+}
+# Returns entered string, or $null if user cancelled.
+function Show-Input($title, $prompt, $default = '') {
+    if (Load-Ui) {
+        $result = [Microsoft.VisualBasic.Interaction]::InputBox($prompt, $title, $default)
+        # InputBox returns "" both on Cancel and on empty OK. Diff не видно — тож
+        # трактуємо порожнє як "re-ask"; реальне скасування юзер робить Alt+F4
+        # або ще раз порожнім + Confirm нижче по flow.
+        if ($null -eq $result) { return '' }
+        return $result
+    } else {
+        return Read-Host $prompt
+    }
+}
+
+# --- 0. Preflight: перевірка системи учня ---
+Write-Step "Перевірка системи"
+
+# Blocker: 32-bit Windows — Java 21 x64 не запуститься
+if ($ArchEnv -eq 'x86') {
+    Write-Err "32-bit Windows не підтримується"
+    Write-Host "    Minecraft 1.21.1 потребує 64-bit Windows 10+ (x64 або ARM64)." -ForegroundColor Red
+    Show-Error 'Kodomandry — несумісна система' "На цьому комп'ютері стоїть 32-bit Windows.`n`nMinecraft 1.21.1 потребує 64-bit Windows 10+ (x64 або ARM64).`n`nПокажи вчителю — можливо треба інший комп'ютер."
+    Read-Host "Натисни Enter щоб закрити"
+    exit 1
+}
+
+# RAM — динамічний heap: половина від системної, у коридорі [2048..6144] MB
+$totalRamGB = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1)
+$MaxHeapMB  = [int][math]::Max(2048, [math]::Min(6144, [math]::Floor($totalRamGB * 1024 / 2)))
+$MinHeapMB  = [int][math]::Min(2048, [math]::Floor($MaxHeapMB / 2))
+Write-Host "  RAM: $totalRamGB GB    Java heap: ${MinHeapMB}..${MaxHeapMB} MB"
+
+if ($totalRamGB -lt 8) {
+    Write-Warn "Мало RAM ($totalRamGB GB). Модпак важкий (Cobblemon+Create), очікуй лаги/креші."
+} elseif ($totalRamGB -lt 12) {
+    Write-Warn "RAM нижче рекомендованого (12 GB). Може лагати на важких локаціях."
+}
+
+# Windows version
+if ($WinMajor -lt 10) {
+    Write-Warn "Windows $WinMajor.$WinMinor — Java 21 офіційно не підтримується на Win 7/8."
+    Write-Host "    Спробуємо поставити, але можуть бути проблеми із запуском." -ForegroundColor Yellow
+}
+
+# Вільне місце на цільовому диску
+$targetDrive = Split-Path $InstallDir -Qualifier
+$driveLetter = $targetDrive.TrimEnd(':')
+$driveInfo   = Get-PSDrive -Name $driveLetter -ErrorAction SilentlyContinue
+if ($driveInfo) {
+    $freeGB = [math]::Round($driveInfo.Free / 1GB, 1)
+    Write-Host "  Вільно на $targetDrive $freeGB GB"
+    if ($freeGB -lt 5) {
+        Write-Err "Замало місця (<5 GB). Модпак не поміститься."
+        Show-Error 'Kodomandry — мало місця на диску' "На диску $targetDrive вільно лише $freeGB ГБ.`n`nПотрібно щонайменше 5 ГБ (краще 10+). Звільни місце і запусти інсталятор ще раз."
+        Read-Host "Натисни Enter щоб закрити"
+        exit 1
+    } elseif ($freeGB -lt 10) {
+        Write-Warn "Мало вільного місця ($freeGB GB). Рекомендовано 10+ GB."
+    }
+}
+
+Write-Ok "Перевірка пройдена"
+
+# --- 0.5. Детект install vs update + welcome-діалог ---
+$PrismExeProbe = Join-Path $PrismDir 'prismlauncher.exe'
+$AccountsProbe = Join-Path $PrismDir 'accounts.json'
+$IsUpdate = (Test-Path $PrismExeProbe) -and (Test-Path $AccountsProbe)
+
+if ($IsUpdate) {
+    Show-Alert 'Kodomandry — оновлення' "Знайдено попередню установку.`n`nЗараз скачаються оновлені моди й конфіги сервера (~1-2 хв).`n`nНатисни OK щоб продовжити."
+} else {
+    Show-Alert 'Kodomandry — установка' "Зараз буде встановлено Minecraft, Java і моди (~500 МБ).`n`nПотрібно 3-10 хвилин та стабільний інтернет. НЕ закривай це вікно до завершення — коли все буде готово, з'явиться зелене вікно 'ВСТАНОВЛЕНО'.`n`nНатисни OK щоб почати."
+}
+
 # --- 1. Підготовка ---
-Write-Step "Kodomandry Installer PoC v0.1"
+Write-Step "Kodomandry Installer PoC v0.1 [$(if ($IsUpdate) { 'update' } else { 'install' })]"
 Write-Host "Install dir: $InstallDir"
 
 New-Dir $InstallDir
@@ -246,8 +358,8 @@ if (-not (Test-Path $instanceCfg)) {
     $instCfg = @"
 InstanceType=OneSix
 OverrideMemory=true
-MinMemAlloc=2048
-MaxMemAlloc=4096
+MinMemAlloc=$MinHeapMB
+MaxMemAlloc=$MaxHeapMB
 iconKey=default
 name=$InstanceName
 notes=Server: 46.225.227.42:25566\nNeoForge 21.1.216
@@ -345,10 +457,19 @@ if (Test-Path $accountsPath) {
 } else {
     Write-Step "Офлайн-акаунт"
     Write-Host "  Нікнейм буде видимий у грі і в сервері для інших гравців."
-    do {
-        $nick = Read-Host "  Введи нікнейм (3-16 символів, латиниця/цифри/_)"
-        $nick = $nick.Trim()
-    } until ($nick -match '^[A-Za-z0-9_]{3,16}$')
+    $nick = ''
+    while (-not ($nick -match '^[A-Za-z0-9_]{3,16}$')) {
+        $nick = (Show-Input 'Kodomandry — нікнейм' "Придумай собі нікнейм для сервера.`nЙого побачать інші гравці.`n`n3-16 символів, тільки латиниця, цифри і _" '').Trim()
+        if (-not ($nick -match '^[A-Za-z0-9_]{3,16}$')) {
+            if ([string]::IsNullOrEmpty($nick)) {
+                if (Show-Confirm 'Скасувати установку?' 'Без нікнейма грати не вийде. Скасувати установку і вийти?') {
+                    throw 'Установку скасовано користувачем'
+                }
+            } else {
+                Show-Alert 'Невалідний нікнейм' "Нікнейм має бути 3-16 символів, тільки:`n  • латиниця (A-Z, a-z)`n  • цифри (0-9)`n  • знак підкреслення (_)`n`nСпробуй ще раз."
+            }
+        }
+    }
 
     # Minecraft offline UUID: MD5("OfflinePlayer:<name>") with version=3 + variant=RFC4122
     $md5 = [System.Security.Cryptography.MD5]::Create()
@@ -411,6 +532,12 @@ Write-Host ''
 Write-Host "  Java: $javaExe"
 Write-Host "  Prism: $prismExe"
 Write-Host ''
+if ($IsUpdate) {
+    Show-Alert 'Kodomandry — оновлено ✓' "Моди й конфіги сервера оновлено.`n`nЗапусти ярлик «Kodomandry Minecraft» (з робочого столу або меню Пуск) — і можна грати."
+} else {
+    Show-Alert 'Kodomandry — встановлено ✓' "Готово!`n`nЗапусти ярлик «Kodomandry Minecraft» (з робочого столу або меню Пуск).`n`nЯкщо Prism запитає 'A new version is available' — натискай No.`n`nДалі обери збірку 'Kodomandry 1.21.1' і натисни Launch."
+}
+
 $launch = Read-Host "Запустити Prism Launcher зараз? [Y/n]"
 if ($launch -eq '' -or $launch -match '^[Yy]') {
     Start-Process -FilePath $prismExe -WorkingDirectory $PrismDir

@@ -46,8 +46,37 @@ step() { echo; echo -e "${CYAN}==> $1${RESET}"; }
 ok()   { echo -e "  ${GREEN}✓${RESET} $1"; }
 warn() { echo -e "  ${YELLOW}!${RESET} $1"; }
 
+# --- GUI-діалоги (osascript). Діти не читають Terminal, тож критичні
+#     повідомлення + введення нікнейма робимо через випливаючі вікна ---
+ui_alert() {
+    osascript - "$@" >/dev/null 2>&1 <<'APPLESCRIPT' || true
+on run argv
+    display alert (item 1 of argv) message (item 2 of argv) buttons {"OK"} default button "OK"
+end run
+APPLESCRIPT
+}
+ui_error() {
+    osascript - "$@" >/dev/null 2>&1 <<'APPLESCRIPT' || true
+on run argv
+    display alert (item 1 of argv) message (item 2 of argv) as critical buttons {"OK"} default button "OK"
+end run
+APPLESCRIPT
+}
+# ui_ask "prompt" [default]  →  stdout = введений текст; exit 1 = Cancel
+ui_ask() {
+    osascript - "$@" 2>/dev/null <<'APPLESCRIPT'
+on run argv
+    set defVal to ""
+    if (count of argv) >= 2 then set defVal to item 2 of argv
+    set dlg to display dialog (item 1 of argv) default answer defVal ¬
+        with title "Kodomandry Minecraft" buttons {"Скасувати", "OK"} default button "OK"
+    return text returned of dlg
+end run
+APPLESCRIPT
+}
+
 # --- Trap для помилок ---
-trap 'echo; echo -e "${RED}✗ ПОМИЛКА на рядку $LINENO${RESET}"; read -r -p "Натисни Enter щоб закрити..."; exit 1' ERR
+trap 'rc=$?; ln=$LINENO; ui_error "Kodomandry — помилка установки" "Щось пішло не так на рядку $ln (код $rc). Зроби скрін цього вікна і покажи вчителю."; echo; echo -e "${RED}✗ ПОМИЛКА на рядку $ln${RESET}"; read -r -p "Натисни Enter щоб закрити..."; exit 1' ERR
 
 # --- Утиліти ---
 download() {
@@ -55,8 +84,21 @@ download() {
     curl -L --fail --retry 3 --retry-delay 2 --progress-bar -o "$out" "$url"
 }
 
+# --- 0. Детект install vs update + welcome-діалог ---
+# Update-режим: Prism + акаунт уже є → користувача не смикаємо
+# по Java/нікнейму, а просто тягнемо свіжі моди.
+PRISM_EXEC_PROBE="$PRISM_DIR/Prism Launcher.app/Contents/MacOS/prismlauncher"
+ACCOUNTS_PROBE="$PRISM_DIR/accounts.json"
+if [[ -x "$PRISM_EXEC_PROBE" && -f "$ACCOUNTS_PROBE" ]]; then
+    IS_UPDATE=1
+    ui_alert "Kodomandry — оновлення" "Знайдено попередню установку. Зараз скачаються оновлені моди й конфіги сервера (~1-2 хв). Натисни OK щоб продовжити."
+else
+    IS_UPDATE=0
+    ui_alert "Kodomandry — установка" "Зараз буде встановлено Minecraft, Java і моди (~500 МБ). Потрібно 3-10 хвилин та стабільний інтернет. НЕ закривай Terminal до завершення — коли буде готово, ти побачиш зелене вікно 'ВСТАНОВЛЕНО'."
+fi
+
 # --- 1. Підготовка ---
-step "Kodomandry Installer PoC v0.1 (macOS $ARCH)"
+step "Kodomandry Installer PoC v0.1 (macOS $ARCH) [$([[ $IS_UPDATE -eq 1 ]] && echo update || echo install)]"
 echo "Install dir: $INSTALL_DIR"
 
 mkdir -p "$INSTALL_DIR" "$TEMP_DIR"
@@ -267,12 +309,20 @@ if [[ -f "$ACCOUNTS_PATH" ]]; then
     ok "Акаунт вже налаштовано"
 else
     echo "  Нікнейм буде видимий у грі та на сервері."
-    while true; do
-        read -r -p "  Введи нікнейм (3-16 символів, латиниця/цифри/_): " NICK
-        NICK="${NICK// /}"
-        if [[ "$NICK" =~ ^[A-Za-z0-9_]{3,16}$ ]]; then break; fi
-        warn "Невалідний нік, спробуй ще."
+    NICK=""
+    while [[ -z "$NICK" ]]; do
+        INPUT=$(ui_ask "Придумай собі нікнейм для сервера. Його побачать інші гравці. 3-16 символів, тільки латиниця, цифри і _." "") || {
+            ui_error "Установку скасовано" "Ти натиснув Скасувати. Без нікнейма грати не вийде. Запусти інсталятор ще раз коли будеш готовий."
+            exit 1
+        }
+        INPUT="${INPUT// /}"
+        if [[ "$INPUT" =~ ^[A-Za-z0-9_]{3,16}$ ]]; then
+            NICK="$INPUT"
+        else
+            ui_alert "Невалідний нікнейм" "Нікнейм має бути 3-16 символів, тільки латиниця (A-Z, a-z), цифри (0-9) і знак підкреслення (_). Спробуй ще раз."
+        fi
     done
+    echo "  Нікнейм: $NICK"
 
     perl -MDigest::MD5=md5_hex -MJSON::PP -e '
 use strict; use warnings;
@@ -378,6 +428,12 @@ echo
 echo "  Java: $JAVA_EXE"
 echo "  Prism: $PRISM_EXEC"
 echo
+
+if [[ $IS_UPDATE -eq 1 ]]; then
+    ui_alert "Kodomandry — оновлено ✓" "Моди й конфіги сервера оновлено. Запусти ярлик «Kodomandry Minecraft» (з /Applications або з робочого столу) — і можна грати. Натисни OK щоб закрити це вікно."
+else
+    ui_alert "Kodomandry — встановлено ✓" "Готово! Запусти ярлик «Kodomandry Minecraft» (з /Applications або з робочого столу). Якщо Prism запитає 'A new version is available' — натискай No. Далі обери збірку 'Kodomandry 1.21.1' і тисни Launch. Натисни OK щоб закрити це вікно."
+fi
 
 read -r -p "Запустити Prism Launcher зараз? [Y/n] " LAUNCH
 LAUNCH=${LAUNCH:-Y}

@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install NSIS
+        run: sudo apt-get update && sudo apt-get install -y nsis
+
+      - name: Build Windows installer (.exe)
+        working-directory: windows
+        run: makensis kodomandry-installer.nsi
+
+      - name: Make macOS script executable
+        run: chmod +x macos/install.command
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "Kodomandry Installer ${VERSION}" \
+            --notes "Автоматичний реліз.
+
+          **Windows:** завантаж \`KodomandryInstaller.exe\` → подвійний клік.
+          Якщо SmartScreen — **More info → Run anyway** (файл поки не підписано).
+
+          **macOS:** завантаж \`install.command\` → правий клік → Відкрити.
+
+          Див. [README](https://github.com/asemelinsky/kodomandry-installer#readme)." \
+            windows/KodomandryInstaller.exe \
+            macos/install.command
