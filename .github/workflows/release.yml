@@ -14,15 +14,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install NSIS
-        run: sudo apt-get update && sudo apt-get install -y nsis
+      - name: Package Windows ZIP
+        run: |
+          chmod +x windows/install.cmd windows/install.ps1 || true
+          (cd windows && zip -r ../kodomandry-installer-windows.zip install.cmd install.ps1 README.md)
 
-      - name: Build Windows installer (.exe)
-        working-directory: windows
-        run: makensis kodomandry-installer.nsi
-
-      - name: Make macOS script executable
-        run: chmod +x macos/install.command
+      - name: Package macOS ZIP
+        run: |
+          chmod +x macos/install.command
+          (cd macos && zip -y ../kodomandry-installer-macos.zip install.command README.md)
 
       - name: Create GitHub Release
         env:
@@ -33,11 +33,12 @@ jobs:
             --title "Kodomandry Installer ${VERSION}" \
             --notes "Автоматичний реліз.
 
-          **Windows:** завантаж \`KodomandryInstaller.exe\` → подвійний клік.
-          Якщо SmartScreen — **More info → Run anyway** (файл поки не підписано).
+          **Windows:** завантаж \`kodomandry-installer-windows.zip\` → розпакуй → запусти \`install.cmd\`.
+          Якщо SmartScreen — **Докладніше → Виконати попри все**.
 
-          **macOS:** завантаж \`install.command\` → правий клік → Відкрити.
+          **macOS:** завантаж \`kodomandry-installer-macos.zip\` → подвійний клік щоб розпакувати → подвійний клік на \`install.command\`.
+          Якщо Gatekeeper блокує — System Settings → Privacy &amp; Security → Open Anyway.
 
           Див. [README](https://github.com/asemelinsky/kodomandry-installer#readme)." \
-            windows/KodomandryInstaller.exe \
-            macos/install.command
+            kodomandry-installer-windows.zip \
+            kodomandry-installer-macos.zip
