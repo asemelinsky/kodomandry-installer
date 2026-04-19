@@ -260,7 +260,7 @@ my ($idx_path, $mc_dir, $mods_dir) = @ARGV;
 open(my $fh, "<", $idx_path) or die "$idx_path: $!";
 my $idx = decode_json(do { local $/; <$fh> });
 
-my %expected = map { "$mc_dir/$_->{path}" => 1 } @{$idx->{files}};
+my %expected = map {; "$mc_dir/$_->{path}" => 1 } @{$idx->{files}};
 
 my $removed = 0;
 if (-d $mods_dir) {
