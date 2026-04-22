@@ -429,25 +429,58 @@ if (Test-Path $overridesDir) {
 # --- 4. Ярлик на робочому столі ---
 Write-Step "Створення ярлика"
 
-$shortcutPath = Join-Path ([Environment]::GetFolderPath('Desktop')) "$AppName Minecraft.lnk"
+# WScript.Shell.Save() — ANSI COM, не пише .lnk у шляхи з Unicode
+# (OneDrive redirect: "C:\Users\...\OneDrive\Робочий стіл\").
+# Workaround: зберігаємо в TEMP (ASCII), потім Move-Item (.NET, Unicode-safe).
+function New-Shortcut($FinalPath, $Target, $WorkDir, $Description) {
+    $lnkName = Split-Path $FinalPath -Leaf
+    $tempLnk = Join-Path $env:TEMP $lnkName
+    if (Test-Path $tempLnk) { Remove-Item $tempLnk -Force -ErrorAction SilentlyContinue }
+
+    $sc = $wshShell.CreateShortcut($tempLnk)
+    $sc.TargetPath       = $Target
+    $sc.WorkingDirectory = $WorkDir
+    $sc.Description      = $Description
+    # TODO: $sc.IconLocation — додати коли буде .ico в assets/
+    $sc.Save()
+
+    try {
+        Move-Item -Path $tempLnk -Destination $FinalPath -Force -ErrorAction Stop
+        return $FinalPath
+    } catch {
+        # Fallback: не вдалось покласти у цільову папку (права / OneDrive lock / тощо).
+        # Залишаємо .lnk у TEMP і повертаємо його шлях — caller покаже учню.
+        return $tempLnk
+    }
+}
+
 $wshShell = New-Object -ComObject WScript.Shell
-$shortcut = $wshShell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath       = $prismExe
-$shortcut.WorkingDirectory = $PrismDir
-$shortcut.Description      = "$AppName Minecraft Launcher"
-# TODO: $shortcut.IconLocation — додати коли буде .ico в assets/
-$shortcut.Save()
-Write-Ok "Ярлик створено: $shortcutPath"
+
+$desktopLnk = Join-Path ([Environment]::GetFolderPath('Desktop')) "$AppName Minecraft.lnk"
+$desktopResult = New-Shortcut $desktopLnk $prismExe $PrismDir "$AppName Minecraft Launcher"
+if ($desktopResult -eq $desktopLnk) {
+    Write-Ok "Ярлик створено: $desktopResult"
+    $desktopFallback = $null
+} else {
+    Write-Host "  ! Не вдалось покласти ярлик на робочий стіл." -ForegroundColor Yellow
+    Write-Host "    Ярлик лежить тут: $desktopResult" -ForegroundColor Yellow
+    $desktopFallback = $desktopResult
+}
 
 # Start Menu
 $startMenuDir = Join-Path ([Environment]::GetFolderPath('StartMenu')) "Programs\$AppName"
 New-Dir $startMenuDir
-$startLnk = $wshShell.CreateShortcut((Join-Path $startMenuDir "$AppName Minecraft.lnk"))
-$startLnk.TargetPath       = $prismExe
-$startLnk.WorkingDirectory = $PrismDir
-$startLnk.Description      = "$AppName Minecraft Launcher"
-$startLnk.Save()
-Write-Ok "Додано у меню Пуск"
+$startLnk = Join-Path $startMenuDir "$AppName Minecraft.lnk"
+$startResult = New-Shortcut $startLnk $prismExe $PrismDir "$AppName Minecraft Launcher"
+if ($startResult -eq $startLnk) {
+    Write-Ok "Додано у меню Пуск"
+} else {
+    Write-Host "  ! Не вдалось додати у меню Пуск (ярлик у TEMP: $startResult)" -ForegroundColor Yellow
+}
+
+if ($desktopFallback) {
+    Show-Alert 'Kodomandry — ярлик' "Не вдалось покласти ярлик на робочий стіл автоматично.`n`nЯрлик лежить тут:`n$desktopFallback`n`nПеретягни його на робочий стіл вручну (або запускай гру з меню Пуск → Kodomandry)."
+}
 
 # --- 4.5. Офлайн-акаунт ---
 $accountsPath = Join-Path $PrismDir 'accounts.json'
