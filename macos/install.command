@@ -20,10 +20,10 @@ PRISM_API="https://api.github.com/repos/Diegiwg/PrismLauncher-Cracked/releases/l
 # ("cannot be opened because of a problem" від Gatekeeper).
 MACOS_MAJOR=$(sw_vers -productVersion 2>/dev/null | cut -d. -f1)
 if [[ -n "$MACOS_MAJOR" && "$MACOS_MAJOR" -lt 12 ]]; then
-    PRISM_ASSET_PATTERN='PrismLauncher-macOS-Legacy-v?[0-9.]+\.zip$'
+    PRISM_ASSET_PATTERN='PrismLauncher-macOS-Legacy-v?[0-9][0-9A-Za-z.\-]*\.zip$'
     PRISM_VARIANT="Legacy (macOS $MACOS_MAJOR)"
 else
-    PRISM_ASSET_PATTERN='PrismLauncher-macOS-v?[0-9.]+\.zip$'
+    PRISM_ASSET_PATTERN='PrismLauncher-macOS-v?[0-9][0-9A-Za-z.\-]*\.zip$'
     PRISM_VARIANT="Modern (macOS $MACOS_MAJOR)"
 fi
 
