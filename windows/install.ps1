@@ -340,33 +340,6 @@ New-Dir $InstanceDir
 New-Dir $mcDir
 New-Dir $modsDir
 
-# Конфіги інстансу — створюємо якщо нема (не чіпаємо якщо юзер міняв)
-$mmcPackPath = Join-Path $InstanceDir 'mmc-pack.json'
-if (-not (Test-Path $mmcPackPath)) {
-    $mmcPack = @'
-{
-    "components": [
-        { "important": true, "uid": "net.minecraft", "version": "1.21.1" },
-        { "uid": "net.neoforged", "version": "21.1.216" }
-    ],
-    "formatVersion": 1
-}
-'@
-    Set-Content -Path $mmcPackPath -Value $mmcPack -Encoding UTF8
-}
-if (-not (Test-Path $instanceCfg)) {
-    $instCfg = @"
-InstanceType=OneSix
-OverrideMemory=true
-MinMemAlloc=$MinHeapMB
-MaxMemAlloc=$MaxHeapMB
-iconKey=default
-name=$InstanceName
-notes=Server: 46.225.227.42:25566\nNeoForge 21.1.216
-"@
-    Set-Content -Path $instanceCfg -Value $instCfg -Encoding UTF8
-}
-
 # Завантаження .mrpack (завжди свіжий)
 $mrpackPath = Join-Path $TempDir 'kodomandry.mrpack'
 Write-Host "  Завантаження модпаку..."
@@ -380,8 +353,37 @@ $mrpackZip = "$mrpackPath.zip"
 Copy-Item $mrpackPath $mrpackZip -Force
 Expand-Archive -Path $mrpackZip -DestinationPath $mrpackExtract -Force
 
-# Парсинг index
+# Парсинг index — версії MC/NeoForge з нього, щоб оновлення модпаку автоматично тягло правильну NF
 $index = Get-Content (Join-Path $mrpackExtract 'modrinth.index.json') -Raw | ConvertFrom-Json
+$mcVersion = $index.dependencies.minecraft
+$nfVersion = $index.dependencies.neoforge
+$packVersion = $index.versionId
+
+# Конфіги інстансу — ЗАВЖДИ перезаписуємо версії з mrpack (щоб NF bump у v1.6.0 дійшов до учня)
+$mmcPackPath = Join-Path $InstanceDir 'mmc-pack.json'
+$mmcPack = @"
+{
+    "components": [
+        { "important": true, "uid": "net.minecraft", "version": "$mcVersion" },
+        { "uid": "net.neoforged", "version": "$nfVersion" }
+    ],
+    "formatVersion": 1
+}
+"@
+Set-Content -Path $mmcPackPath -Value $mmcPack -Encoding UTF8
+
+if (-not (Test-Path $instanceCfg)) {
+    $instCfg = @"
+InstanceType=OneSix
+OverrideMemory=true
+MinMemAlloc=$MinHeapMB
+MaxMemAlloc=$MaxHeapMB
+iconKey=default
+name=$InstanceName
+notes=Server: 46.225.227.42:25566\nNeoForge $nfVersion\nModpack $packVersion
+"@
+    Set-Content -Path $instanceCfg -Value $instCfg -Encoding UTF8
+}
 
 # Очікуваний набір повних шляхів до модів
 $expected = @{}
