@@ -1,53 +1,59 @@
 # Kodomandry Installer
 
-Один клік — і учень має повністю готову збірку Minecraft з модпаком, Java та передзаданим сервером.
+Один клік — і учень має повністю готову збірку Minecraft з модпаком, Java та передзаданим сервером. Повторний запуск — це повне оновлення (нові моди, нові версії лоадера).
 
 ## Цільові платформи
 
-- ✅ **Windows 10/11** — `windows/` (PowerShell + `.cmd` wrapper)
-- ⏳ **macOS 12+** — `macos/` (заглушка)
+- ✅ **Windows 10/11** — `windows/install.cmd` + `install.ps1` (у ZIP)
+- ✅ **macOS 12+** — `macos/install.command` (у ZIP)
 
-## Що робить (Windows, поточна версія)
+## Що робить (той самий флоу і встановлення, і оновлення)
 
-Подвійний клік на `install.cmd` → PowerShell вікно, чекай 3–10 хв:
+Учень двічі клікає на `install.cmd` (Windows) або `install.command` (macOS). PowerShell/Terminal, чекати 3–10 хв:
 
-1. Створює `%LOCALAPPDATA%\Kodomandry\`
-2. Качає **Prism Launcher Cracked** (Diegiwg, portable ZIP)
-3. Перевіряє / ставить **Java 21** (Temurin JRE з Adoptium)
-4. Пре-конфігурує Prism: portable режим, мова `uk_UA`, вимкнене автооновлення
-5. Створює збірку **Kodomandry 1.21.1** (NeoForge 21.1.216):
-   - качає `.mrpack` з GitHub Release
-   - парсить `modrinth.index.json`, качає всі моди з Modrinth CDN
-   - застосовує `overrides/` (конфіги + `servers.dat` з сервером `46.225.227.42:25566`)
-6. Ярлики на робочому столі + у Start Menu
-7. Пропонує запустити Prism
-
-**Залишається вручну:** один раз додати офлайн-акаунт (Accounts → Add Offline → нікнейм).
+1. Створює `%LOCALAPPDATA%\Kodomandry\` / `~/Library/Application Support/Kodomandry/`
+2. Качає **Prism Launcher Cracked** (Diegiwg, portable) якщо немає
+3. Ставить **Java 21** (Temurin JRE) якщо немає
+4. Пре-конфігурує Prism: portable, `uk_UA`, вимкнене автооновлення
+5. Збірка **Kodomandry 1.21.1**:
+   - качає свіжий `.mrpack` з GitHub Release модпака
+   - читає `modrinth.index.json` → Minecraft + NeoForge версії **завжди** беруться звідти (тому bump NeoForge у модпаку автоматично доходить до клієнта)
+   - синхронізує моди: видаляє старі `.jar`, докачує нові, збігам — пропускає
+   - перезаписує `overrides/` (конфіги + `servers.dat`)
+6. Автогенерація офлайн-акаунта через запит нікнейму
+7. Ярлики на робочому столі та у Start Menu / `/Applications/`
+8. Пропонує запустити Prism
 
 ## Структура
 
 ```
 kodomandry-installer/
 ├── windows/          install.cmd + install.ps1 + README
-├── macos/            (заглушка)
-├── assets/           іконка (TBD)
+├── macos/            install.command + README
+├── assets/           (іконка TBD)
 ├── docs/             нотатки
+├── publish.sh        git tag + push → GitHub Actions збирає ZIP-и і створює реліз
 ├── README.md
 └── STATUS.md         поточний статус + план
 ```
 
-## Як запустити
+## Як запустити (для учня)
 
 **Windows:**
-1. Скачати [`KodomandryInstaller.exe`](https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/KodomandryInstaller.exe) → подвійний клік
-2. Якщо SmartScreen попередить — **More info → Run anyway** (файл ще не підписаний)
-3. Чекати. Якщо Prism покаже "A new version is available" — **No**
-4. Ввести нікнейм коли попросить
-5. Вибрати збірку **Kodomandry 1.21.1** → Launch
+1. Скачати [`kodomandry-installer-windows.zip`](https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/kodomandry-installer-windows.zip)
+2. Правий клік → Extract All (або розпакувати будь-яким інструментом)
+3. Подвійний клік на `install.cmd`. Якщо SmartScreen — **Докладніше → Виконати попри все**.
+4. Якщо Prism покаже "A new version is available" — **No**.
+5. Ввести нікнейм коли попросить.
+6. Вибрати збірку **Kodomandry 1.21.1** → Launch.
 
 **macOS:**
-1. Скачати [`install.command`](https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/install.command) → правий клік → **Відкрити**
-2. Ввести нікнейм коли попросить
+1. Скачати [`kodomandry-installer-macos.zip`](https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/kodomandry-installer-macos.zip)
+2. Подвійний клік розпакує.
+3. Правий клік на `install.command` → **Відкрити** (при першому запуску — обійти Gatekeeper).
+4. Ввести нікнейм.
+
+**Оновлення**: просто запустити `install.cmd` / `install.command` ще раз — моди, лоадер, конфіги синхронізуються автоматично, світ і опції залишаються.
 
 ## Константи
 
@@ -55,17 +61,17 @@ kodomandry-installer/
 |---|---|
 | Сервер | `46.225.227.42:25566` |
 | Minecraft | 1.21.1 |
-| Loader | NeoForge 21.1.216 |
+| NeoForge | береться з `modrinth.index.json → dependencies.neoforge` (зараз 21.1.222) |
 | Prism Cracked | https://github.com/Diegiwg/PrismLauncher-Cracked/releases |
 | Java | Temurin JRE 21 LTS (latest) |
 | Модпак | https://github.com/asemelinsky/kodomandy-modpack/releases/latest |
 
 ## Статус
 
-Див. [STATUS.md](STATUS.md) — що зроблено, що лишилось, план.
+Див. [STATUS.md](STATUS.md).
 
 ## Ризики
 
-- **SmartScreen** на Windows — поки дистрибуція ZIP/cmd+ps1, warning не буде; при переході на `.exe` — з'явиться
-- **Gatekeeper** на macOS — вимагає правого кліку → Open без Apple Developer ID
-- **Cracked Prism update prompt** — не вимикається через cfg, документовано як "натисни No"
+- **SmartScreen** на Windows — користувач може злякатися; документовано як "Докладніше → Виконати попри все".
+- **Gatekeeper** на macOS — вимагає правого кліку → Open без Apple Developer ID.
+- **Cracked Prism update prompt** — не вимикається через cfg, документовано як "No".
