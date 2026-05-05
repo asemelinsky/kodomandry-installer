@@ -19,7 +19,7 @@
 2. Prism Launcher Cracked (portable) — ставлять якщо нема
 3. Java 21 Temurin — перевіряють system/local/качають якщо нема
 4. Prism config: portable + `Language=uk_UA` + `AutoUpdate=false`
-5. Створюють збірку `Kodomandry 1.21.1` (NeoForge 21.1.216) якщо нема
+5. Створюють/оновлюють збірку `Kodomandry 1.21.1`; NeoForge-версія читається з manifest модпака (`modrinth.index.json → dependencies.neoforge`) — апдейт модпака автоматично оновить NeoForge на клієнті
 6. **Завжди** качають свіжий `.mrpack` і **синхронізують моди**:
    - видаляють старі `.jar` (яких більше нема в модпаку)
    - докачують нові/відсутні

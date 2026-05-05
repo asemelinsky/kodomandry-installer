@@ -17,7 +17,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1
    - `Language=uk_UA` (без setup-wizard мови)
    - `AutoUpdate=false`
 4. Перевіряє Java 21 (system PATH → локальна → Temurin JRE 21)
-5. Створює збірку `Kodomandry 1.21.1` з готовим NeoForge 21.1.216
+5. Створює збірку `Kodomandry 1.21.1`; NeoForge-версія береться з manifest модпака (`modrinth.index.json → dependencies.neoforge`) — апдейт модпака автоматично оновлює NeoForge на клієнті
 6. Качає `.mrpack` з модпак-репо, парсить `modrinth.index.json`, качає ~19 модів з Modrinth CDN
 7. Застосовує `overrides/` (конфіги + `servers.dat` з сервером)
 8. Ярлик `Kodomandry Minecraft` на робочому столі + у Start Menu

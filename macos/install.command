@@ -220,18 +220,39 @@ MC_DIR="$INSTANCE_DIR/.minecraft"
 MODS_DIR="$MC_DIR/mods"
 mkdir -p "$INSTANCE_DIR" "$MC_DIR" "$MODS_DIR"
 
-# Конфіги — тільки якщо нема
-if [[ ! -f "$INSTANCE_DIR/mmc-pack.json" ]]; then
-    cat > "$INSTANCE_DIR/mmc-pack.json" <<'EOF'
+# Завантаження .mrpack ПЕРЕД конфігами — щоб версії NeoForge/Minecraft взяти
+# з manifest. Раніше було hardcoded "21.1.216" → при апдейті модпака
+# (v1.6.0 → NeoForge 21.1.222) клієнт лишався на старій версії і сервер
+# відмовляв "Incompatible client! Please use NeoForge 21.1.222".
+MRPACK="$TEMP_DIR/kodomandry.mrpack"
+echo "  Завантаження модпаку..."
+download "$MODPACK_URL" "$MRPACK"
+
+MRPACK_DIR="$TEMP_DIR/mrpack"
+rm -rf "$MRPACK_DIR"; mkdir -p "$MRPACK_DIR"
+unzip -q "$MRPACK" -d "$MRPACK_DIR"
+
+# Версії з manifest (Win-installer робить так само)
+NF_VERSION=$(perl -MJSON::PP -0777 -ne 'print decode_json($_)->{dependencies}{neoforge}' "$MRPACK_DIR/modrinth.index.json")
+MC_VERSION=$(perl -MJSON::PP -0777 -ne 'print decode_json($_)->{dependencies}{minecraft}' "$MRPACK_DIR/modrinth.index.json")
+if [[ -z "$NF_VERSION" || -z "$MC_VERSION" ]]; then
+    echo "✗ Не зміг прочитати neoforge/minecraft з modrinth.index.json"
+    exit 1
+fi
+ok "Версії з модпака: Minecraft $MC_VERSION + NeoForge $NF_VERSION"
+
+# mmc-pack.json — ЗАВЖДИ регенеруємо, щоб update підхопив свіжу NeoForge
+cat > "$INSTANCE_DIR/mmc-pack.json" <<EOF
 {
     "components": [
-        { "important": true, "uid": "net.minecraft", "version": "1.21.1" },
-        { "uid": "net.neoforged", "version": "21.1.216" }
+        { "important": true, "uid": "net.minecraft", "version": "$MC_VERSION" },
+        { "uid": "net.neoforged", "version": "$NF_VERSION" }
     ],
     "formatVersion": 1
 }
 EOF
-fi
+
+# instance.cfg — пишемо тільки якщо нема (не затирати user-tweaks пам'яті)
 if [[ ! -f "$INSTANCE_DIR/instance.cfg" ]]; then
     cat > "$INSTANCE_DIR/instance.cfg" <<EOF
 InstanceType=OneSix
@@ -240,18 +261,9 @@ MinMemAlloc=2048
 MaxMemAlloc=4096
 iconKey=default
 name=$INSTANCE_NAME
-notes=Server: 46.225.227.42:25566\nNeoForge 21.1.216
+notes=Server: 46.225.227.42:25566\nNeoForge $NF_VERSION
 EOF
 fi
-
-# Завантаження .mrpack (завжди свіжий)
-MRPACK="$TEMP_DIR/kodomandry.mrpack"
-echo "  Завантаження модпаку..."
-download "$MODPACK_URL" "$MRPACK"
-
-MRPACK_DIR="$TEMP_DIR/mrpack"
-rm -rf "$MRPACK_DIR"; mkdir -p "$MRPACK_DIR"
-unzip -q "$MRPACK" -d "$MRPACK_DIR"
 
 # Sync: видалити старі, докачати нові
 perl -MJSON::PP -0777 -e '

@@ -27,7 +27,7 @@
 3. Знімає `com.apple.quarantine` (щоб Gatekeeper не блокував)
 4. Активує portable-режим + `prismlauncher.cfg` з `Language=uk_UA`, `AutoUpdate=false`
 5. Перевіряє Java 21 (system → local → Temurin JRE 21 для `aarch64` або `x64`)
-6. Створює збірку `Kodomandry 1.21.1` (NeoForge 21.1.216), качає модпак, моди, overrides
+6. Створює збірку `Kodomandry 1.21.1`; NeoForge-версія читається динамічно з manifest модпака (`modrinth.index.json → dependencies.neoforge`) — апдейт модпака автоматично підіймає NeoForge на учня; качає модпак, моди, overrides
 7. Symlink у `/Applications/Kodomandry Minecraft.app` (або на Desktop якщо нема прав)
 
 ## Gatekeeper
