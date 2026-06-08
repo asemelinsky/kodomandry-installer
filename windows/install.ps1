@@ -1,7 +1,20 @@
 ﻿# Kodomandry Minecraft Installer (Windows)
 # PoC v0.1 — portable Prism Launcher + Temurin JRE 21
 #
-# Usage: powershell -ExecutionPolicy Bypass -File install.ps1
+# Usage:
+#   powershell -ExecutionPolicy Bypass -File install.ps1
+#   powershell -ExecutionPolicy Bypass -File install.ps1 -InstallDir D
+#   powershell -ExecutionPolicy Bypass -File install.ps1 -InstallDir "D:\MyGames\Kodomandry"
+#
+# Через install.cmd:
+#   install.cmd        — звичайний запуск (авто-вибір диску)
+#   install.cmd D      — примусово на диск D:\Kodomandry
+#   install.cmd "D:\Custom\Path"  — у вказану папку
+
+param(
+    [Parameter(Mandatory=$false)]
+    [string]$InstallDir = ''
+)
 
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls
@@ -41,11 +54,11 @@ trap {
 }
 
 # --- Константи ---
-$AppName      = 'Kodomandry'
-$InstallDir   = Join-Path $env:LOCALAPPDATA $AppName
-$PrismDir     = Join-Path $InstallDir 'PrismLauncher'
-$JavaDir      = Join-Path $InstallDir 'java21'
-$TempDir      = Join-Path $env:TEMP "$AppName-install"
+$AppName           = 'Kodomandry'
+$DefaultInstallDir = Join-Path $env:LOCALAPPDATA $AppName  # C:\Users\...\AppData\Local\Kodomandry
+$TempDir           = Join-Path $env:TEMP "$AppName-install"
+# $InstallDir, $PrismDir, $JavaDir, $InstanceDir — задаються нижче
+# після detect existing install / drive selection (див. секцію 0.5).
 
 $PrismApi     = 'https://api.github.com/repos/Diegiwg/PrismLauncher-Cracked/releases/latest'
 
@@ -72,7 +85,6 @@ if ($ArchEnv -eq 'ARM64') {
 
 $ModpackUrl   = 'https://github.com/asemelinsky/kodomandy-modpack/releases/latest/download/kodomandy-server2.mrpack'
 $InstanceName = 'Kodomandry 1.21.1'
-$InstanceDir  = Join-Path $PrismDir "instances\Kodomandry"
 
 # Temurin JRE 21 latest Windows ZIP (arch залежить від системи)
 $JavaApi      = "https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=$JavaArch&image_type=jre&os=windows&vendor=eclipse"
@@ -137,6 +149,154 @@ function Show-Input($title, $prompt, $default = '') {
     }
 }
 
+# --- Drive utilities ---
+# Кандидат-шлях для встановлення на конкретному диску.
+# C: → %LOCALAPPDATA%\Kodomandry (як було)
+# Інші → <LETTER>:\Kodomandry (видимо в корені, не приховано в AppData)
+function Get-InstallPathForDrive($DriveLetter) {
+    if ($DriveLetter -eq 'C') { return $DefaultInstallDir }
+    return "${DriveLetter}:\$AppName"
+}
+
+# Нормалізує користувацький -InstallDir у абсолютний шлях.
+# Приклади:
+#   "D"               -> "D:\Kodomandry"
+#   "d"               -> "D:\Kodomandry"
+#   "D:"              -> "D:\Kodomandry"
+#   "D:\"             -> "D:\Kodomandry"
+#   "D:\MyGames"      -> "D:\MyGames"
+#   "\\?\D:\path"     -> as-is
+function Resolve-InstallDirInput([string]$RawInput) {
+    if ([string]::IsNullOrWhiteSpace($RawInput)) { return $null }
+    $trimmed = $RawInput.Trim().Trim('"')
+    # Одна літера
+    if ($trimmed -match '^[A-Za-z]$') {
+        return (Get-InstallPathForDrive ($trimmed.ToUpper()))
+    }
+    # "X:" або "X:\"
+    if ($trimmed -match '^([A-Za-z]):\\?$') {
+        return (Get-InstallPathForDrive ($Matches[1].ToUpper()))
+    }
+    # Повний шлях — як є (нормалізуємо backslash і слеші)
+    return $trimmed.Replace('/', '\').TrimEnd('\')
+}
+
+# Шукає вже існуючу установку на будь-якому fixed disk.
+# Повертає шлях або $null.
+function Find-ExistingInstall {
+    $candidates = @($DefaultInstallDir)
+    Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction SilentlyContinue | ForEach-Object {
+        $letter = $_.DeviceID.TrimEnd(':')
+        if ($letter -ne 'C') { $candidates += Get-InstallPathForDrive $letter }
+    }
+    foreach ($path in $candidates) {
+        $prismExe = Join-Path $path 'PrismLauncher\prismlauncher.exe'
+        $accounts = Join-Path $path 'PrismLauncher\accounts.json'
+        if ((Test-Path $prismExe) -and (Test-Path $accounts)) {
+            return $path
+        }
+    }
+    return $null
+}
+
+# WPF-діалог з radio-buttons для вибору диска.
+# Повертає обраний install-шлях. Exit якщо користувач скасував.
+function Select-InstallDrive {
+    # Збираємо fixed-диски з ≥5 GB вільного місця
+    $drives = @()
+    Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction SilentlyContinue | ForEach-Object {
+        $freeGB = [math]::Round($_.FreeSpace / 1GB, 1)
+        if ($freeGB -ge 5) {
+            $drives += [PSCustomObject]@{
+                Letter = $_.DeviceID.TrimEnd(':')
+                FreeGB = $freeGB
+                Path   = Get-InstallPathForDrive ($_.DeviceID.TrimEnd(':'))
+            }
+        }
+    }
+
+    if ($drives.Count -eq 0) {
+        # Немає жодного диска з достатнім місцем — fallback на дефолт, далі впаде free-space check
+        return $DefaultInstallDir
+    }
+    if ($drives.Count -eq 1) {
+        Write-Host "  Один підходящий диск: $($drives[0].Letter): ($($drives[0].FreeGB) GB)" -ForegroundColor DarkGray
+        return $drives[0].Path
+    }
+
+    # Кілька дисків — без UI fallback на C: (або перший)
+    if (-not (Load-Ui)) {
+        $cDrive = $drives | Where-Object { $_.Letter -eq 'C' } | Select-Object -First 1
+        if ($cDrive) { return $cDrive.Path }
+        return $drives[0].Path
+    }
+
+    # WPF-вікно з radio-buttons
+    [xml]$xaml = @"
+<Window xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
+        xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'
+        Title='Kodomandry — вибір диску' Height='340' Width='460'
+        WindowStartupLocation='CenterScreen' ResizeMode='NoResize'>
+    <Grid Margin='15'>
+        <Grid.RowDefinitions>
+            <RowDefinition Height='Auto'/>
+            <RowDefinition Height='Auto'/>
+            <RowDefinition Height='*'/>
+            <RowDefinition Height='Auto'/>
+        </Grid.RowDefinitions>
+        <TextBlock Grid.Row='0' Text='Куди встановити Kodomandry?' FontSize='15' FontWeight='Bold' Margin='0,0,0,5'/>
+        <TextBlock Grid.Row='1' Text='Обери диск з достатнім місцем (потрібно щонайменше 5 GB).' Foreground='#555' Margin='0,0,0,10' TextWrapping='Wrap'/>
+        <StackPanel Grid.Row='2' x:Name='OptionsPanel'/>
+        <StackPanel Grid.Row='3' Orientation='Horizontal' HorizontalAlignment='Right' Margin='0,15,0,0'>
+            <Button x:Name='OkButton' Content='OK' Width='90' Height='28' Margin='5,0' IsDefault='True'/>
+            <Button x:Name='CancelButton' Content='Скасувати' Width='90' Height='28' Margin='5,0' IsCancel='True'/>
+        </StackPanel>
+    </Grid>
+</Window>
+"@
+
+    $reader = New-Object System.Xml.XmlNodeReader $xaml
+    $window = [Windows.Markup.XamlReader]::Load($reader)
+    $optionsPanel = $window.FindName('OptionsPanel')
+    $okButton     = $window.FindName('OkButton')
+    $cancelButton = $window.FindName('CancelButton')
+
+    $script:SelectedInstallPath = $null
+
+    # Радіо-кнопки для кожного диска (C: завжди перший, як рекомендований)
+    $sortedDrives = @($drives | Where-Object { $_.Letter -eq 'C' }) + @($drives | Where-Object { $_.Letter -ne 'C' } | Sort-Object Letter)
+    $first = $true
+    foreach ($d in $sortedDrives) {
+        $rb = New-Object System.Windows.Controls.RadioButton
+        if ($d.Letter -eq 'C') {
+            $rb.Content = "C:  ($($d.FreeGB) GB вільно) — рекомендовано  [$($d.Path)]"
+        } else {
+            $rb.Content = "$($d.Letter):  ($($d.FreeGB) GB вільно)  [$($d.Path)]"
+        }
+        $rb.Margin   = '0,6'
+        $rb.FontSize = 13
+        $rb.Tag      = $d.Path
+        if ($first) {
+            $rb.IsChecked = $true
+            $script:SelectedInstallPath = $d.Path
+            $first = $false
+        }
+        $rb.Add_Checked({ $script:SelectedInstallPath = $this.Tag })
+        [void]$optionsPanel.AddChild($rb)
+    }
+
+    $okButton.Add_Click({ $window.DialogResult = $true; $window.Close() })
+    $cancelButton.Add_Click({ $window.DialogResult = $false; $window.Close() })
+
+    $result = $window.ShowDialog()
+    if ($result -ne $true) {
+        Write-Host "Установку скасовано користувачем (вибір диска)." -ForegroundColor Yellow
+        Show-Alert 'Kodomandry — скасовано' 'Установку скасовано. Запусти ще раз коли будеш готовий.'
+        exit 0
+    }
+    return $script:SelectedInstallPath
+}
+
 # --- 0. Preflight: перевірка системи учня ---
 Write-Step "Перевірка системи"
 
@@ -166,6 +326,33 @@ if ($WinMajor -lt 10) {
     Write-Warn "Windows $WinMajor.$WinMinor — Java 21 офіційно не підтримується на Win 7/8."
     Write-Host "    Спробуємо поставити, але можуть бути проблеми із запуском." -ForegroundColor Yellow
 }
+
+# --- Detect existing install / select drive ---
+# Пріоритет:
+#   1) Користувач передав -InstallDir D (або повний шлях) → використати без питань.
+#   2) Знайдено попередню установку → reuse (silent update).
+#   3) Інакше → WPF-діалог вибору диска (якщо їх кілька).
+$userInstallDir = Resolve-InstallDirInput $InstallDir
+if ($userInstallDir) {
+    $InstallDir = $userInstallDir
+    Write-Host "  Явно вказано -InstallDir: $InstallDir" -ForegroundColor Cyan
+    # Створимо папку якщо нема, щоб подальші перевірки місця і Test-Path працювали коректно
+    if (-not (Test-Path $InstallDir)) {
+        New-Item -ItemType Directory -Path $InstallDir -Force -ErrorAction SilentlyContinue | Out-Null
+    }
+} else {
+    $existingInstall = Find-ExistingInstall
+    if ($existingInstall) {
+        $InstallDir = $existingInstall
+        Write-Host "  Знайдено попередню установку: $InstallDir" -ForegroundColor DarkGray
+    } else {
+        $InstallDir = Select-InstallDrive
+        Write-Host "  Обраний диск: $InstallDir" -ForegroundColor DarkGray
+    }
+}
+$PrismDir    = Join-Path $InstallDir 'PrismLauncher'
+$JavaDir     = Join-Path $InstallDir 'java21'
+$InstanceDir = Join-Path $PrismDir "instances\Kodomandry"
 
 # Вільне місце на цільовому диску
 $targetDrive = Split-Path $InstallDir -Qualifier

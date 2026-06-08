@@ -9,6 +9,22 @@
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
+### Примусово вказати диск/папку (для випадків коли C: переповнений)
+
+```cmd
+install.cmd D                       :: → D:\Kodomandry
+install.cmd E                       :: → E:\Kodomandry
+install.cmd "D:\MyGames\Kodomandry" :: → у вказану папку
+```
+
+Або напряму через PowerShell:
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1 -InstallDir D
+powershell -ExecutionPolicy Bypass -File install.ps1 -InstallDir "D:\Custom\Path"
+```
+
+Якщо `-InstallDir` задано — інсталятор пропускає авто-детект диску і ставить у вказане місце.
+
 ## Що робить
 
 1. Створює `%LOCALAPPDATA%\Kodomandry\`

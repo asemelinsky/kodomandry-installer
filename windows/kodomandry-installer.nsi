@@ -27,7 +27,7 @@ VIAddVersionKey LegalCopyright "© Kodomandry"
 
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE    "Встановлення Kodomandry Minecraft"
-!define MUI_WELCOMEPAGE_TEXT     "Майстер встановить портативний Prism Launcher, Java 21 і модпак Kodomandry 1.21.1 у теку користувача ($$LOCALAPPDATA).$\r$\n$\r$\nНатисни Далі щоб продовжити."
+!define MUI_WELCOMEPAGE_TEXT     "Майстер встановить портативний Prism Launcher, Java 21 і модпак Kodomandry 1.21.1.$\r$\n$\r$\nЯкщо в системі кілька дисків — буде запропоновано вибір.$\r$\n$\r$\nНатисни Далі щоб продовжити."
 !define MUI_FINISHPAGE_TITLE     "Встановлення завершено"
 !define MUI_FINISHPAGE_TEXT      "Kodomandry готовий до запуску. Ярлик Prism Launcher знайдеш у меню Пуск."
 
