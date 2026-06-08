@@ -64,10 +64,14 @@ $TempDir           = Join-Path $env:TEMP "$AppName-install"
 
 $PrismApi     = 'https://api.github.com/repos/Diegiwg/PrismLauncher-Cracked/releases/latest'
 
-# Детект архітектури + версії Windows для вибору Prism-білду:
-#   ARM64           → MinGW-arm64-Portable
-#   x64, Win 10/11  → MSVC-Portable (найстабільніший)
-#   x64, Win 7/8/8.1→ MinGW-w64-Portable (MSVC-білди не запускаються на старих Win)
+# Детект архітектури для вибору Prism-білду:
+#   ARM64  → MinGW-arm64-Portable
+#   x64    → MinGW-w64-Portable (default для всіх Windows — bundle-ить власні DLL)
+#
+# Раніше для Win 10/11 використовувався MSVC-білд, але він залежить від системного
+# icu.dll який є лише у Win 10 build ≥16299 (Fall Creators Update, жовтень 2017).
+# На старіших Win 10 (1607, 1703) prismlauncher.exe падає з «icu.dll not found».
+# MinGW-білд статично лінкує всі залежності, тому працює всюди.
 $WinMajor = [Environment]::OSVersion.Version.Major
 $WinMinor = [Environment]::OSVersion.Version.Minor
 $ArchEnv  = $env:PROCESSOR_ARCHITECTURE  # AMD64 / ARM64 / x86
@@ -75,14 +79,10 @@ if ($ArchEnv -eq 'ARM64') {
     $PrismAsset = 'PrismLauncher-Windows-MinGW-arm64-Portable-*.zip'
     $JavaArch   = 'aarch64'
     $PrismVariant = "MinGW ARM64 (Win $WinMajor.$WinMinor)"
-} elseif ($WinMajor -lt 10) {
+} else {
     $PrismAsset = 'PrismLauncher-Windows-MinGW-w64-Portable-*.zip'
     $JavaArch   = 'x64'
-    $PrismVariant = "MinGW w64 (Win $WinMajor.$WinMinor — legacy)"
-} else {
-    $PrismAsset = 'PrismLauncher-Windows-MSVC-Portable-*.zip'
-    $JavaArch   = 'x64'
-    $PrismVariant = "MSVC (Win $WinMajor.$WinMinor)"
+    $PrismVariant = "MinGW w64 (Win $WinMajor.$WinMinor)"
 }
 
 $ModpackUrl   = 'https://github.com/asemelinsky/kodomandy-modpack/releases/latest/download/kodomandy-server2.mrpack'
