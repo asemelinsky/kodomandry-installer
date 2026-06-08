@@ -21,9 +21,10 @@ $ErrorActionPreference = 'Stop'
 
 function Download-File($Url, $OutFile) {
     # Prefer curl.exe (ships with Windows 10+) — handles redirects + large files reliably
+    # --ssl-no-revoke: пропустити CRL/OCSP-перевірку (часта проблема шкільних/корпоративних мереж де фаєрвол блокує lookup → curl error 35 schannel CRYPT_E_REVOCATION_OFFLINE)
     $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
     if ($curl) {
-        & curl.exe -L --fail --retry 3 --retry-delay 2 --progress-bar -o $OutFile $Url
+        & curl.exe -L --ssl-no-revoke --fail --retry 3 --retry-delay 2 --progress-bar -o $OutFile $Url
         if ($LASTEXITCODE -ne 0) { throw "curl.exe failed ($LASTEXITCODE) for $Url" }
     } else {
         Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing
@@ -32,9 +33,10 @@ function Download-File($Url, $OutFile) {
 
 function Invoke-Api($Url) {
     # curl.exe обходить TLS/cipher-проблеми старих Windows (Invoke-RestMethod падає на GitHub API)
+    # --ssl-no-revoke: див. вище у Download-File
     $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
     if ($curl) {
-        $json = & curl.exe -sSL --fail --retry 3 --retry-delay 2 -H "User-Agent: $AppName" $Url
+        $json = & curl.exe -sSL --ssl-no-revoke --fail --retry 3 --retry-delay 2 -H "User-Agent: $AppName" $Url
         if ($LASTEXITCODE -ne 0) { throw "curl.exe failed ($LASTEXITCODE) for $Url" }
         return $json | ConvertFrom-Json
     }
