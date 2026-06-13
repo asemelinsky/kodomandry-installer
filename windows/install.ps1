@@ -622,10 +622,16 @@ Write-Step "Створення ярлика"
 
 # WScript.Shell.Save() — ANSI COM, не пише .lnk у шляхи з Unicode
 # (OneDrive redirect: "C:\Users\...\OneDrive\Робочий стіл\").
-# Workaround: зберігаємо в TEMP (ASCII), потім Move-Item (.NET, Unicode-safe).
+# Workaround: зберігаємо в гарантовано-ASCII теці, потім Move-Item (.NET, Unicode-safe).
+#
+# НЕ використовувати $env:TEMP — для користувачів з кириличним ім'ям повертає
+# 8.3 short name (типу C:\Users\3C8A~1\...), а у Win10/11 8.3-генерація на
+# системному NTFS-томі вимкнена → ФС такого шляху не знаходить → Move-Item впаде.
+# $env:PUBLIC (C:\Users\Public) завжди ASCII і writable.
 function New-Shortcut($FinalPath, $Target, $WorkDir, $Description) {
     $lnkName = Split-Path $FinalPath -Leaf
-    $tempLnk = Join-Path $env:TEMP $lnkName
+    $stagingDir = if ($env:PUBLIC -and (Test-Path $env:PUBLIC)) { $env:PUBLIC } else { 'C:\Users\Public' }
+    $tempLnk = Join-Path $stagingDir $lnkName
     if (Test-Path $tempLnk) { Remove-Item $tempLnk -Force -ErrorAction SilentlyContinue }
 
     $sc = $wshShell.CreateShortcut($tempLnk)
