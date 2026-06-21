@@ -99,44 +99,133 @@ ui_ask() {
 # --- Trap для помилок ---
 trap 'rc=$?; ln=$LINENO; ui_error "Kodomandry — помилка установки" "Щось пішло не так на рядку $ln (код $rc). Зроби скрін цього вікна і покажи вчителю."; echo; echo -e "${RED}✗ ПОМИЛКА на рядку $ln${RESET}"; read -r -p "Натисни Enter щоб закрити..."; exit 1' ERR
 
-# --- Перевірка залежностей ---
+# ui_confirm "title" "message" — питання Так/Ні. exit 0 = Yes, 1 = No.
+ui_confirm() {
+    case "$UI_TOOL" in
+        zenity)
+            zenity --question --title="$1" --text="$2" \
+                --ok-label="Так, встановити" --cancel-label="Ні, я сам" \
+                --width=460 >/dev/null 2>&1
+            ;;
+        kdialog)
+            kdialog --title "$1" --yesno "$2" >/dev/null 2>&1
+            ;;
+        *)
+            echo; echo -e "${CYAN}■ $1${RESET}"; echo "  $2"; echo
+            local ans=""
+            read -r -p "  Встановити автоматично? [Y/n] " ans
+            ans=${ans:-Y}
+            [[ "$ans" =~ ^[Yy]$ ]]
+            ;;
+    esac
+}
+
+# --- Перевірка залежностей з auto-install ---
+# Збирає всі відсутні системні утиліти + perl-модулі у один список,
+# показує діалог із підказкою, пропонує встановити через sudo одним пакетом.
 check_deps() {
-    local missing=()
+    local missing_cmds=()
+    local missing_pkgs=()
+
+    # Системні утиліти
     for cmd in curl perl tar unzip; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
-            missing+=("$cmd")
+            missing_cmds+=("$cmd")
+            missing_pkgs+=("$cmd")
         fi
     done
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        local hint=""
-        if command -v dnf >/dev/null 2>&1; then
-            hint="sudo dnf install -y ${missing[*]}"
-        elif command -v apt >/dev/null 2>&1; then
-            hint="sudo apt update && sudo apt install -y ${missing[*]}"
-        elif command -v pacman >/dev/null 2>&1; then
-            hint="sudo pacman -S --needed ${missing[*]}"
-        elif command -v zypper >/dev/null 2>&1; then
-            hint="sudo zypper install -y ${missing[*]}"
+
+    # Perl JSON::PP — у більшості дистрибутивів є з perl-core, але інколи окремо.
+    # Назва пакета різна на різних дистрибутивах, тому формуємо нижче по pkgmgr.
+    local need_json_pp=0
+    if command -v perl >/dev/null 2>&1; then
+        if ! perl -MJSON::PP -e1 >/dev/null 2>&1; then
+            need_json_pp=1
+            missing_cmds+=("perl-JSON::PP")
         fi
-        ui_error "Бракує системних утиліт" "Не знайдено: ${missing[*]}. Встанови їх:\n\n$hint\n\nі запусти інсталятор знову."
-        echo -e "${RED}✗ Бракує: ${missing[*]}${RESET}"
-        echo "  Спробуй: $hint"
+    fi
+
+    # Нічого не бракує
+    if [[ ${#missing_cmds[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    # Детект package manager + назва JSON-PP пакета для нього
+    local pkgmgr="" install_cmd="" json_pp_pkg=""
+    if command -v dnf >/dev/null 2>&1; then
+        pkgmgr="dnf"; install_cmd="sudo dnf install -y"; json_pp_pkg="perl-JSON-PP"
+    elif command -v apt >/dev/null 2>&1; then
+        pkgmgr="apt"; install_cmd="sudo apt install -y"; json_pp_pkg="libjson-pp-perl"
+    elif command -v pacman >/dev/null 2>&1; then
+        pkgmgr="pacman"; install_cmd="sudo pacman -S --needed --noconfirm"; json_pp_pkg="perl"
+    elif command -v zypper >/dev/null 2>&1; then
+        pkgmgr="zypper"; install_cmd="sudo zypper install -y"; json_pp_pkg="perl-JSON-PP"
+    fi
+
+    # Замінити placeholder perl-JSON::PP на правильний пакет
+    if [[ $need_json_pp -eq 1 ]]; then
+        local new_pkgs=()
+        for p in "${missing_pkgs[@]}"; do
+            new_pkgs+=("$p")
+        done
+        new_pkgs+=("$json_pp_pkg")
+        missing_pkgs=("${new_pkgs[@]}")
+    fi
+
+    local full_cmd="$install_cmd ${missing_pkgs[*]}"
+    if [[ "$pkgmgr" == "apt" ]]; then
+        full_cmd="sudo apt update && $full_cmd"
+    fi
+
+    # Якщо pkgmgr не визначений — не можемо нічого зробити
+    if [[ -z "$pkgmgr" ]]; then
+        ui_error "Бракує системних утиліт" "Не знайдено: ${missing_cmds[*]}. Встанови їх через package manager твого дистрибутиву і запусти інсталятор знову."
+        echo -e "${RED}✗ Бракує: ${missing_cmds[*]}${RESET}"
+        echo "  Не зміг детектити package manager — встанови вручну."
         exit 1
     fi
 
-    # Perl JSON::PP — у більшості дистрибутивів є з perl-core, але інколи окремо.
-    if ! perl -MJSON::PP -e1 >/dev/null 2>&1; then
-        local hint=""
-        if command -v dnf >/dev/null 2>&1; then
-            hint="sudo dnf install -y perl-JSON-PP"
-        elif command -v apt >/dev/null 2>&1; then
-            hint="sudo apt install -y libjson-pp-perl"
-        elif command -v pacman >/dev/null 2>&1; then
-            hint="sudo pacman -S --needed perl"
+    echo -e "${YELLOW}!${RESET} Бракує: ${missing_cmds[*]}"
+    echo "  Команда для встановлення: $full_cmd"
+    echo
+
+    # Питаємо чи встановлювати автоматично
+    local msg="Для роботи інсталятора бракує: ${missing_cmds[*]}.\n\nКоманда:\n$full_cmd\n\nПотрібно ввести пароль адміністратора (sudo).\n\nВстановити автоматично зараз?"
+    if ui_confirm "Бракує системних утиліт" "$msg"; then
+        echo "  Запуск: $full_cmd"
+        # Не використовуємо || щоб ERR trap зловив помилку. Якщо sudo впаде —
+        # юзер побачить причину (не той пароль, мережа, тощо) і зможе виконати вручну.
+        # Виконуємо у термін explicit щоб sudo міг попросити пароль.
+        if [[ "$pkgmgr" == "apt" ]]; then
+            sudo apt update
+            sudo apt install -y "${missing_pkgs[@]}"
+        elif [[ "$pkgmgr" == "dnf" ]]; then
+            sudo dnf install -y "${missing_pkgs[@]}"
+        elif [[ "$pkgmgr" == "pacman" ]]; then
+            sudo pacman -S --needed --noconfirm "${missing_pkgs[@]}"
+        elif [[ "$pkgmgr" == "zypper" ]]; then
+            sudo zypper install -y "${missing_pkgs[@]}"
         fi
-        ui_error "Бракує perl-модуля JSON::PP" "Встанови:\n\n$hint"
-        echo -e "${RED}✗ Бракує perl JSON::PP${RESET}"
-        echo "  Спробуй: $hint"
+
+        # Re-check — якщо все одно бракує, помилка
+        local still_missing=()
+        for cmd in curl perl tar unzip; do
+            command -v "$cmd" >/dev/null 2>&1 || still_missing+=("$cmd")
+        done
+        if [[ $need_json_pp -eq 1 ]] && ! perl -MJSON::PP -e1 >/dev/null 2>&1; then
+            still_missing+=("perl-JSON::PP")
+        fi
+
+        if [[ ${#still_missing[@]} -gt 0 ]]; then
+            ui_error "Установка пакетів не повна" "Після установки все одно бракує: ${still_missing[*]}.\n\nПеревір лог вище і встанови вручну:\n\n$full_cmd"
+            echo -e "${RED}✗ Все одно бракує після sudo: ${still_missing[*]}${RESET}"
+            exit 1
+        fi
+        echo -e "  ${GREEN}✓${RESET} Залежності встановлено"
+    else
+        ui_error "Установку не можна продовжити" "Без цих пакетів інсталятор не може працювати.\n\nВстанови вручну:\n\n$full_cmd\n\nі запусти знову."
+        echo -e "${RED}✗ Користувач відмовився встановити залежності${RESET}"
+        echo "  Команда: $full_cmd"
         exit 1
     fi
 }
