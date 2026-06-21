@@ -6,12 +6,13 @@
 
 - ✅ **Windows 10/11** — `windows/install.cmd` + `install.ps1` (у ZIP)
 - ✅ **macOS 12+** — `macos/install.command` (у ZIP)
+- 🆕 **Linux** — `linux/install.sh` (Fedora/Ubuntu/Debian/Arch/openSUSE; x86_64+aarch64; реліз заплановано на v2026.07.x)
 
 ## Що робить (той самий флоу і встановлення, і оновлення)
 
 Учень двічі клікає на `install.cmd` (Windows) або `install.command` (macOS). PowerShell/Terminal, чекати 3–10 хв:
 
-1. Створює `%LOCALAPPDATA%\Kodomandry\` / `~/Library/Application Support/Kodomandry/`
+1. Створює `%LOCALAPPDATA%\Kodomandry\` / `~/Library/Application Support/Kodomandry/` / `~/.local/share/Kodomandry/`
 2. Качає **Prism Launcher Cracked** (Diegiwg, portable) якщо немає
 3. Ставить **Java 21** (Temurin JRE) якщо немає
 4. Пре-конфігурує Prism: portable, `uk_UA`, вимкнене автооновлення
@@ -30,6 +31,7 @@
 kodomandry-installer/
 ├── windows/          install.cmd + install.ps1 + README
 ├── macos/            install.command + README
+├── linux/            install.sh + README (🆕 v2026.07.x)
 ├── assets/           (іконка TBD)
 ├── docs/             нотатки
 ├── publish.sh        git tag + push → GitHub Actions збирає ZIP-и і створює реліз
@@ -53,7 +55,14 @@ kodomandry-installer/
 3. Правий клік на `install.command` → **Відкрити** (при першому запуску — обійти Gatekeeper).
 4. Ввести нікнейм.
 
-**Оновлення**: просто запустити `install.cmd` / `install.command` ще раз — моди, лоадер, конфіги синхронізуються автоматично, світ і опції залишаються.
+**Linux** _(після релізу v2026.07.x)_:
+1. Скачати [`kodomandry-installer-linux.zip`](https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/kodomandry-installer-linux.zip)
+2. Розпакувати у будь-яку теку.
+3. Відкрити Terminal у цій теці → `chmod +x install.sh && ./install.sh`
+4. Ввести нікнейм (зʼявиться вікно або запит у Terminal).
+5. Запустити з ярлика **Kodomandry Minecraft** з робочого столу або з меню програм.
+
+**Оновлення**: просто запустити `install.cmd` / `install.command` / `install.sh` ще раз — моди, лоадер, конфіги синхронізуються автоматично, світ і опції залишаються.
 
 ## Константи
 

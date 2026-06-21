@@ -24,11 +24,21 @@ jobs:
           chmod +x macos/install.command
           (cd macos && zip -y ../kodomandry-installer-macos.zip install.command README.md)
 
+      - name: Package Linux ZIP
+        if: hashFiles('linux/install.sh') != ''
+        run: |
+          chmod +x linux/install.sh
+          (cd linux && zip ../kodomandry-installer-linux.zip install.sh README.md)
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          ASSETS=(kodomandry-installer-windows.zip kodomandry-installer-macos.zip)
+          if [ -f kodomandry-installer-linux.zip ]; then
+            ASSETS+=(kodomandry-installer-linux.zip)
+          fi
           gh release create "${GITHUB_REF_NAME}" \
             --title "Kodomandry Installer ${VERSION}" \
             --notes "Автоматичний реліз.
@@ -39,6 +49,8 @@ jobs:
           **macOS:** завантаж \`kodomandry-installer-macos.zip\` → подвійний клік щоб розпакувати → подвійний клік на \`install.command\`.
           Якщо Gatekeeper блокує — System Settings → Privacy &amp; Security → Open Anyway.
 
+          **Linux:** завантаж \`kodomandry-installer-linux.zip\` → розпакуй → у Terminal \`chmod +x install.sh && ./install.sh\`.
+          Працює на Fedora 38+, Ubuntu 22.04+, Debian 12+, Arch, openSUSE (x86_64 + aarch64).
+
           Див. [README](https://github.com/asemelinsky/kodomandry-installer#readme)." \
-            kodomandry-installer-windows.zip \
-            kodomandry-installer-macos.zip
+            "${ASSETS[@]}"
