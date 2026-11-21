@@ -45,9 +45,12 @@ kodomandry-installer/
 1. Скачати [`kodomandry-installer-windows.zip`](https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/kodomandry-installer-windows.zip)
 2. Правий клік → Extract All (або розпакувати будь-яким інструментом)
 3. Подвійний клік на `install.cmd`. Якщо SmartScreen — **Докладніше → Виконати попри все**.
+   - Якщо Windows 11 показує **«Smart App Control заблокував файл»** (нім. «Smart App Control hat eine Datei blockiert…»), кнопки обходу там немає. Вимкни Smart App Control: Пуск → «Безпека Windows» (нім. «Windows-Sicherheit») → «Керування програмами та браузером» (нім. «App- & Browsersteuerung») → «Параметри розумного керування програмами» (нім. «Smart App Control-Einstellungen») → **Вимкнено** (нім. «Aus»). Далі знову запусти `install.cmd`. Увімкнути його назад можна лише перевстановленням Windows.
 4. Якщо Prism покаже "A new version is available" — **No**.
 5. Ввести нікнейм коли попросить.
 6. Вибрати збірку **Kodomandry 1.21.1** → Launch.
+
+**Оновлення модів:** модпак завжди береться з останнього релізу (`kodomandy-modpack`, зараз **v1.7.0**). Щоб отримати нові моди, учень просто знову запускає `install.cmd` (старі моди видаляються, нові докачуються).
 
 **macOS:**
 1. Скачати [`kodomandry-installer-macos.zip`](https://github.com/asemelinsky/kodomandry-installer/releases/latest/download/kodomandry-installer-macos.zip)
@@ -82,5 +85,6 @@ kodomandry-installer/
 ## Ризики
 
 - **SmartScreen** на Windows — користувач може злякатися; документовано як "Докладніше → Виконати попри все".
+- **Smart App Control** (Windows 11) — блокує непідписаний `install.cmd` без кнопки обходу (виявлено 2026-11-21 у учня). Обхід лише вимкнення SAC (незворотне); справжнє рішення — підписаний інсталер (Azure Trusted Signing / EV).
 - **Gatekeeper** на macOS — вимагає правого кліку → Open без Apple Developer ID.
 - **Cracked Prism update prompt** — не вимикається через cfg, документовано як "No".

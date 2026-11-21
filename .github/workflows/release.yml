@@ -17,7 +17,7 @@ jobs:
       - name: Package Windows ZIP
         run: |
           chmod +x windows/install.cmd windows/install.ps1 || true
-          (cd windows && zip -r ../kodomandry-installer-windows.zip install.cmd install.ps1 README.md)
+          (cd windows && zip -r ../kodomandry-installer-windows.zip install.cmd install-gui.ps1 install.ps1 README.md)
 
       - name: Package macOS ZIP
         run: |
@@ -45,6 +45,9 @@ jobs:
 
           **Windows:** завантаж \`kodomandry-installer-windows.zip\` → розпакуй → запусти \`install.cmd\`.
           Якщо SmartScreen — **Докладніше → Виконати попри все**.
+          Якщо Windows 11 пише **«Smart App Control заблокував файл»** (нім. «Smart App Control hat eine Datei blockiert…») — там немає кнопки обходу. Вимкни: Пуск → «Безпека Windows» (нім. «Windows-Sicherheit») → «Керування програмами та браузером» (нім. «App- & Browsersteuerung») → «Параметри розумного керування програмами» (нім. «Smart App Control-Einstellungen») → **Вимкнено** (нім. «Aus»), потім знову запусти \`install.cmd\`. Увімкнути назад можна лише перевстановленням Windows.
+
+          **Моди:** інсталер сам бере модпак з останнього релізу \`kodomandy-modpack\` (зараз **v1.7.0**: Structory, Connected Glass, Diagonal Fences, Dynamic Lights, Copycats+, Create Tracks; Minecraft 1.21.1, NeoForge 21.1.222). Щоб оновити моди — просто знову запусти \`install.cmd\`.
 
           **macOS:** завантаж \`kodomandry-installer-macos.zip\` → подвійний клік щоб розпакувати → подвійний клік на \`install.command\`.
           Якщо Gatekeeper блокує — System Settings → Privacy &amp; Security → Open Anyway.

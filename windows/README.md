@@ -25,6 +25,14 @@ powershell -ExecutionPolicy Bypass -File install.ps1 -InstallDir "D:\Custom\Path
 
 Якщо `-InstallDir` задано — інсталятор пропускає авто-детект диску і ставить у вказане місце.
 
+### Якщо Windows 11 блокує файл («Smart App Control»)
+
+Це не SmartScreen: кнопки «Виконати попри все» немає. Вимкни Smart App Control:
+Пуск → «Безпека Windows» (нім. «Windows-Sicherheit») → «Керування програмами та браузером»
+(«App- & Browsersteuerung») → «Параметри розумного керування програмами»
+(«Smart App Control-Einstellungen») → **Вимкнено** («Aus»). Потім знову `install.cmd`.
+Назад увімкнути можна лише перевстановленням Windows.
+
 ## Що робить
 
 1. Створює `%LOCALAPPDATA%\Kodomandry\`

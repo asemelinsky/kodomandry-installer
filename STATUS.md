@@ -1,14 +1,79 @@
 # Kodomandry Installer — статус і план
 
-**Останнє оновлення:** 2026-06-21
-**Реліз:** `v2026.06.13-1` (Win/Mac), Linux — заплановано `v2026.07.x` після тесту
+**Останнє оновлення:** 2026-11-21
+**Реліз:** `v2026.11.21-1` (Win/Mac/Linux; Windows ZIP вперше з `install-gui.ps1`)
+
+## 2026-11-21 — Smart App Control + перевірка модпака
+
+- У учня Windows 11 (нім.) Smart App Control заблокував `install.cmd` — кнопки обходу немає.
+  Інструкція вимкнення SAC додана в README, `windows/README.md` і release notes. Назад SAC не вмикається.
+  Справжнє рішення — підписаний інсталер (Azure Trusted Signing / EV), поки не зроблено.
+- Виявлено: `release.yml` не клав `install-gui.ps1` у Windows-ZIP, а новий `install.cmd` запускає саме його.
+  Виправлено. ZIP від квітня (`dist/`, 3 файли без GUI) — застарів.
+- Моди: інсталер тягне `releases/latest/download/kodomandy-server2.mrpack` з `asemelinsky/kodomandy-modpack`.
+  Перевірено 2026-11-21: latest = v1.7.0 (41 мод), збігається з тек модами Server 2, усі URL відповідають 200.
+
+## 🆕 GUI wizard (Sprint A) — 2026-08-17
+
+**Що зроблено:**
+- `windows/install-gui.ps1` — WPF-wizard навколо існуючої логіки `install.ps1`
+  (~1200 рядків: 250 utility+Step-функції, 200 XAML, решта — навігація/runspace).
+- 5 сторінок: Welcome → Install location + Nickname → Ready → Progress → Done.
+- Приховує чорне cmd/PS-вікно (`ShowWindow(GetConsoleWindow, SW_HIDE)`).
+- Segoe UI, 22pt заголовки / 14pt текст — читабельно для батьків/дідусів.
+- Прогрес-бар (0-100%) + поточний етап + опційний log-панель («Показати деталі»)
+  для troubleshooting.
+- Українська локалізація.
+- Background runspace виконує install steps (Preflight, DownloadPrism, InstallJava,
+  SyncModpack, CreateShortcuts, ConfigureAccount, Cleanup) — не блокує UI.
+  Прогрес пропихається через synchronized hashtable + ConcurrentQueue логів,
+  UI-thread опитує через DispatcherTimer (150ms tick).
+- Detect update (є `PrismLauncher\accounts.json`) — приховує nickname-поле,
+  міняє заголовок на «Оновлення».
+- Detect no drives with 5+GB — показує помилку прямо на Page 2.
+
+**`windows/install.cmd`:**
+- За замовчуванням запускає **install-gui.ps1** (WindowStyle Hidden — жодних
+  чорних вікон).
+- `--console` / `-console` / `/console` fallback → старий console-режим
+  (`install.ps1`).
+- Опційний `<InstallDir>` argument (D, "D:\Custom\Path") працює у обох режимах.
+
+**Як тестувати вручну (на Windows):**
+1. Розпакувати ZIP у будь-яку теку.
+2. Подвійний клік на `install.cmd` — має з'явитись WPF-вікно з зеленим header.
+3. Пройти всі 5 сторінок.
+4. `install.cmd --console` — старий консольний режим для дебагу.
+5. `install.cmd D` — GUI + примусово диск D.
+
+**Обмеження Sprint A:**
+- Немає signing certificate → SmartScreen warning при першому запуску
+  («Windows protected your PC» → Докладніше → Виконати попри все).
+- Тестування на Linux неможливе (немає pwsh + WPF). Синтаксично XAML і скрипт
+  перевірені (bracket-balance + XML parse), але живий тест лише на Windows.
+- Пере-запуск WPF requires PowerShell 5.1+ — на Windows 10/11 stock. Win 7/8 з
+  PS 4.x не підтримуються (Java 21 теж не підтримується).
+- Runspace-based cancel через `PowerShell.Stop()` не завжди перериває curl —
+  може лишитись curl-процес до кінця download (10-30 с).
+- Емодзі ⛏ (U+26CF) використано замість Unicode-emoji ranges щоб уникнути
+  відсутнього гліфа у Segoe UI.
+
+**Sprint B roadmap (коли буде час):**
+- Tauri або WixToolset wrapper → повний `.exe` з іконкою і без залежності
+  від PowerShell.
+- Signing certificate (EV Cert ~$300/рік або DigiCert $200/рік) щоб прибрати
+  SmartScreen warning.
+- Live download progress bar (парсити `curl.exe --progress-meter`).
+- Icon у header banner (`.ico` замість Unicode-символа).
 
 ## ✅ Готово
 
 ### Windows (`windows/install.cmd` + `install.ps1`)
 Протестовано на живому компі, працює end-to-end. У `v2026.06.13-1` виправлено
 крах при кириличному імені користувача Windows (`$env:TEMP` → `$env:PUBLIC`
-для staging-теки ярлика).
+для staging-теки ярлика). З 2026-08-17 — обгорнено у WPF wizard (див.
+Sprint A вгорі), `install.ps1` залишається консольним fallback через
+`install.cmd --console`.
 
 ### macOS (`macos/install.command`)
 Адаптивно для Apple Silicon / Intel. Асет `.zip`. Знімає Gatekeeper-карантин.
